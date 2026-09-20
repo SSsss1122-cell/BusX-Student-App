@@ -1,0 +1,50 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+
+# Android
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+ios/Flutter/.last_build_id/
+
+# macOS
+macos/Pods/
+macos/Flutter/ephemeral/
+
+# Windows
+windows/flutter/ephemeral/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+
+# Logs
+*.log
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local configuration
+local.properties
+
+# OS files
+.DS_Store
+Thumbs.db
