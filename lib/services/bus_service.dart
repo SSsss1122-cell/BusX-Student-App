@@ -1,84 +1,78 @@
-
-import 'package:supabase_flutter/supabase_flutter.dart';
+﻿import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../screens/tracking/bus_info.dart';
 
 class BusService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // ─────────────────────────────────────────────
-  // Get all active buses belonging to an institution
-  // ─────────────────────────────────────────────
+  /// Fetch all buses for an institution, with their latest location attached.
+  Future<List<BusInfo>> getInstitutionBuses(String institutionId) async {
+    final busesResponse = await _supabase
+        .from('buses')
+        .select()
+        .eq('institution_id', institutionId);
 
-  Future<List<BusInfo>> getInstitutionBuses(
-    String institutionId,
-  ) async {
-    try {
-      final response = await _supabase
-          .from('buses')
-          .select()
-          .eq('institution_id', institutionId)
-          .eq('is_active', true)
-          .order('bus_number');
+    final buses = List<Map<String, dynamic>>.from(busesResponse);
+    final List<BusInfo> result = [];
 
-      return (response as List)
-          .map(
-            (item) => BusInfo.fromMap(
-              Map<String, dynamic>.from(item),
-            ),
-          )
-          .toList();
-    } on PostgrestException catch (e) {
-      throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Unable to load buses.');
+    for (final bus in buses) {
+      final busId = bus['id']?.toString();
+      if (busId == null) continue;
+
+      // Get latest location for this bus
+      Map<String, dynamic>? latestLocation;
+      try {
+        final locResponse = await _supabase
+            .from('bus_locations')
+            .select()
+            .eq('bus_id', busId)
+            .order('updated_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        latestLocation = locResponse;
+      } catch (_) {
+        latestLocation = null;
+      }
+
+      result.add(BusInfo.fromMap(bus, location: latestLocation));
     }
+
+    return result;
   }
 
-  // ─────────────────────────────────────────────
-  // Get latest location of a bus
-  // ─────────────────────────────────────────────
-
-  Future<Map<String, dynamic>?> getLatestBusLocation(
-    String busId,
-  ) async {
+  /// Fetch live location for a specific bus (used by tracking screen).
+  Future<Map<String, dynamic>?> getLatestLocation(String busId) async {
     try {
-      final response = await _supabase
+      final res = await _supabase
           .from('bus_locations')
           .select()
           .eq('bus_id', busId)
           .order('updated_at', ascending: false)
           .limit(1)
           .maybeSingle();
-
-      return response;
-    } on PostgrestException catch (e) {
-      throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Unable to load bus location.');
+      return res;
+    } catch (_) {
+      return null;
     }
   }
 
-  // ─────────────────────────────────────────────
-  // Get stops for a bus
-  // ─────────────────────────────────────────────
-
-  Future<List<Map<String, dynamic>>> getBusStops(
-    String busId,
-  ) async {
+  /// Fetch the route stops for a bus, in order.
+  Future<List<Map<String, dynamic>>> getBusStops(String busId) async {
     try {
-      final response = await _supabase
+      final res = await _supabase
           .from('bus_stops')
           .select()
           .eq('bus_id', busId)
-          .order('sequence');
-
-      return List<Map<String, dynamic>>.from(response);
-    } on PostgrestException catch (e) {
-      throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Unable to load bus stops.');
+          .order('sequence', ascending: true);
+      return List<Map<String, dynamic>>.from(res);
+    } catch (_) {
+      return [];
     }
   }
-}
 
+  /// Fetch the student's own bus (based on students_new.routes if applicable).
+  /// For now, returns null — extend later.
+  Future<BusInfo?> getStudentBus(String studentId) async {
+    return null;
+  }
+}

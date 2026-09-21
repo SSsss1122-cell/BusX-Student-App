@@ -4,11 +4,11 @@ import '../../models/student.dart';
 import '../../theme/app_colors.dart';
 
 class AnnouncementsScreen extends StatelessWidget {
-  final Student student;
+  final Student? student;
 
   const AnnouncementsScreen({
     super.key,
-    required this.student,
+    this.student,
   });
 
   @override

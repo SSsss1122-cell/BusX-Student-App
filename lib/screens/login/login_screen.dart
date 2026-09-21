@@ -80,9 +80,7 @@ setState(() {
 
 Navigator.of(context).pushReplacement(
   MaterialPageRoute(
-    builder: (_) => BusXShell(
-      student: student,
-    ),
+    builder: (_) => const BusXShell(),
   ),
 );
     } catch (e) {

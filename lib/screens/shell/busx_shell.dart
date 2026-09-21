@@ -1,21 +1,15 @@
-import 'package:flutter/material.dart';
-
-import '../../models/student.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_colors.dart';
-import '../announcements/announcements_screen.dart';
-import '../complaints/complaints_screen.dart';
 import '../home/home_screen.dart';
-import '../notices/notices_screen.dart';
 import '../profile/profile_screen.dart';
-import '../tracking/tracking_screen.dart';
+import '../complaints/complaints_screen.dart';
+import '../announcements/announcements_screen.dart';
+import '../notices/notices_screen.dart';
+import '../login/login_screen.dart';
 
 class BusXShell extends StatefulWidget {
-  final Student student;
-
-  const BusXShell({
-    super.key,
-    required this.student,
-  });
+  const BusXShell({super.key});
 
   @override
   State<BusXShell> createState() => _BusXShellState();
@@ -24,188 +18,142 @@ class BusXShell extends StatefulWidget {
 class _BusXShellState extends State<BusXShell> {
   int _currentIndex = 0;
 
-  late final List<Widget> _screens;
+  final List<Widget> _screens = const [
+    HomeScreen(),
+    ProfileScreen(),
+  ];
 
-  @override
-  void initState() {
-    super.initState();
-
-    _screens = [
-      HomeScreen(student: widget.student),
-      TrackingScreen(student: widget.student),
-      AnnouncementsScreen(student: widget.student),
-      NoticesScreen(student: widget.student),
-      ComplaintsScreen(student: widget.student),
-      ProfileScreen(student: widget.student),
-    ];
-  }
-
-  void _changePage(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-  }
+  final List<String> _titles = const [
+    'Live Tracking',
+    'My Profile',
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-
-      // ----------------------------------------------------------
-      // TOP APP BAR
-      // ----------------------------------------------------------
-
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        title: Text(_titles[_currentIndex]),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
         elevation: 0,
-
-        titleSpacing: 18,
-
-        title: Row(
-          children: [
-            // BusX logo
-            Container(
-              width: 38,
-              height: 38,
-
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    AppColors.primary,
-                    AppColors.primaryLight,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(11),
-              ),
-
-              child: const Icon(
-                Icons.directions_bus_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-
-            const SizedBox(width: 10),
-
-            const Text(
-              'BusX',
-              style: TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-                color: AppColors.primary,
-              ),
-            ),
-          ],
-        ),
-
-        actions: [
-          // Notification button
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {
-              // Notifications will be connected later.
-            },
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(
-                  Icons.notifications_none_rounded,
-                  size: 27,
-                ),
-
-                // Notification indicator
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: AppColors.error,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu_rounded),
+            onPressed: () => Scaffold.of(context).openDrawer(),
           ),
-
-          const SizedBox(width: 4),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AnnouncementsScreen()),
+              );
+            },
+          ),
         ],
       ),
-
-      // ----------------------------------------------------------
-      // MAIN CONTENT
-      // ----------------------------------------------------------
-
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
-
-      // ----------------------------------------------------------
-      // BOTTOM NAVIGATION
-      // ----------------------------------------------------------
-
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-
-        onDestinationSelected: _changePage,
-
-        backgroundColor: Colors.white,
-
-        indicatorColor:
-            AppColors.primary.withValues(alpha: 0.12),
-
-        elevation: 8,
-
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(
-              Icons.home_outlined,
-            ),
-            selectedIcon: Icon(
-              Icons.home_rounded,
-            ),
-            label: 'Home',
+      drawer: _buildDrawer(),
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.textSecondary,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.location_on_rounded),
+            label: 'Tracking',
           ),
-
-          NavigationDestination(
-            icon: Icon(
-              Icons.location_on_outlined,
-            ),
-            selectedIcon: Icon(
-              Icons.location_on_rounded,
-            ),
-            label: 'Track',
-          ),
-
-          NavigationDestination(
-            icon: Icon(
-              Icons.campaign_outlined,
-            ),
-            selectedIcon: Icon(
-              Icons.campaign_rounded,
-            ),
-            label: 'Updates',
-          ),
-
-          NavigationDestination(
-            icon: Icon(
-              Icons.person_outline_rounded,
-            ),
-            selectedIcon: Icon(
-              Icons.person_rounded,
-            ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_rounded),
             label: 'Profile',
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primary, AppColors.primaryLight],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Colors.white24,
+                  child: Icon(Icons.person, color: Colors.white, size: 35),
+                ),
+                SizedBox(height: 10),
+                Text('Student Name',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    )),
+                Text('student@sgi.edu',
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ],
+            ),
+          ),
+          _drawerItem(Icons.person_outline, 'Profile', () {
+            Navigator.pop(context);
+            setState(() => _currentIndex = 1);
+          }),
+          _drawerItem(Icons.report_problem_outlined, 'Complaints', () {
+            Navigator.pop(context);
+            Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const ComplaintsScreen()));
+          }),
+          _drawerItem(Icons.campaign_outlined, 'Announcements', () {
+            Navigator.pop(context);
+            Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const AnnouncementsScreen()));
+          }),
+          _drawerItem(Icons.notifications_outlined, 'Notices', () {
+            Navigator.pop(context);
+            Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const NoticesScreen()));
+          }),
+          const Divider(),
+          _drawerItem(
+              Icons.payment_outlined, 'Fees', () => Navigator.pop(context)),
+          _drawerItem(Icons.settings_outlined, 'Settings',
+              () => Navigator.pop(context)),
+          _drawerItem(Icons.logout_rounded, 'Logout', () async {
+  Navigator.pop(context); // close drawer
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove('logged_in_usn');
+  if (!mounted) return;
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const LoginScreen()),
+    (route) => false,
+  );
+}),
+        ],
+      ),
+    );
+  }
+
+  Widget _drawerItem(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: AppColors.primary),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+      onTap: onTap,
     );
   }
 }
