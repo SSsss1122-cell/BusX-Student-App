@@ -1,4 +1,5 @@
-﻿import 'package:supabase_flutter/supabase_flutter.dart';
+﻿
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../screens/tracking/bus_info.dart';
 
@@ -19,7 +20,6 @@ class BusService {
       final busId = bus['id']?.toString();
       if (busId == null) continue;
 
-      // Get latest location for this bus
       Map<String, dynamic>? latestLocation;
       try {
         final locResponse = await _supabase
@@ -40,7 +40,7 @@ class BusService {
     return result;
   }
 
-  /// Fetch live location for a specific bus (used by tracking screen).
+  /// Fetch live location for a specific bus.
   Future<Map<String, dynamic>?> getLatestLocation(String busId) async {
     try {
       final res = await _supabase
@@ -56,22 +56,60 @@ class BusService {
     }
   }
 
-  /// Fetch the route stops for a bus, in order.
-  Future<List<Map<String, dynamic>>> getBusStops(String busId) async {
+  /// Fetch ALL stops for a bus (both morning and evening).
+  /// The caller decides which direction to display based on context.
+  Future<List<Map<String, dynamic>>> getAllStops(String busId) async {
     try {
       final res = await _supabase
           .from('bus_stops')
           .select()
           .eq('bus_id', busId)
           .order('sequence', ascending: true);
-      return List<Map<String, dynamic>>.from(res);
+
+      final list = List<Map<String, dynamic>>.from(res);
+      // Filter out rows that don't belong to this bus
+      list.removeWhere((s) => s['bus_id'] == null);
+      return list;
     } catch (_) {
       return [];
     }
   }
 
-  /// Fetch the student's own bus (based on students_new.routes if applicable).
-  /// For now, returns null — extend later.
+  /// Fetch stops for a specific direction ('morning' or 'evening'),
+  /// strictly ordered by sequence.
+  Future<List<Map<String, dynamic>>> getBusStops(
+    String busId, {
+    String? direction,
+  }) async {
+    try {
+      var query = _supabase
+          .from('bus_stops')
+          .select()
+          .eq('bus_id', busId);
+
+      if (direction != null && direction.isNotEmpty) {
+        query = query.eq('direction', direction);
+      }
+
+      final res = await query.order('sequence', ascending: true);
+
+      final list = List<Map<String, dynamic>>.from(res)
+          .where((s) => s['bus_id'] != null)
+          .toList();
+
+      // Defensive client-side sort
+      list.sort((a, b) {
+        final sa = (a['sequence'] as num?)?.toInt() ?? 999999;
+        final sb = (b['sequence'] as num?)?.toInt() ?? 999999;
+        return sa.compareTo(sb);
+      });
+
+      return list;
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<BusInfo?> getStudentBus(String studentId) async {
     return null;
   }

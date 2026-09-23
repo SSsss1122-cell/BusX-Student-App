@@ -19,15 +19,24 @@ class BusDetailScreen extends StatefulWidget {
 class _BusDetailScreenState extends State<BusDetailScreen> {
   final BusService _busService = BusService();
   Timer? _timer;
+  Timer? _uiTicker;
+
+  // Currently active direction ('morning' or 'evening')
+  String _direction = 'morning';
+
+  // All stops for this bus (both directions)
+  List<Map<String, dynamic>> _allStops = [];
+
+  // Stops filtered to the active direction, ordered by sequence
+  List<Map<String, dynamic>> _stops = [];
+
+  int _currentStopIndex = 0;
+  bool _loading = true;
 
   double? _lat;
   double? _lng;
   DateTime? _updatedAt;
   double? _speed;
-
-  List<Map<String, dynamic>> _stops = [];
-  int _currentStopIndex = 0;
-  bool _loading = true;
 
   @override
   void initState() {
@@ -41,36 +50,99 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
     _loadStops();
     _refreshLocation();
 
+    // 10-second data refresh
     _timer = Timer.periodic(const Duration(seconds: 10), (_) {
       _refreshLocation();
+    });
+
+    // 1-second UI tick so the signal-lost banner updates immediately
+    _uiTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
     });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _uiTicker?.cancel();
     super.dispose();
   }
 
-  // ─────────────────────────────────────────────
-  // Signal staleness
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------
+  // Signal staleness (40s = driver stopped)
+  // ---------------------------------------------
   bool get _isSignalStale {
     if (_updatedAt == null) return true;
-    return DateTime.now().difference(_updatedAt!).inSeconds > 120;
+    return DateTime.now().difference(_updatedAt!).inSeconds > 40;
   }
 
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------
   // Data loading
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------
   Future<void> _loadStops() async {
-    final stops = await _busService.getBusStops(widget.bus.id);
+    final allStops = await _busService.getAllStops(widget.bus.id);
     if (!mounted) return;
+
     setState(() {
-      _stops = stops;
+      _allStops = allStops;
       _loading = false;
+      _detectDirectionAndFilter();
       _recomputeCurrentStop();
     });
+  }
+
+  /// Determine the direction based on the driver's closest stop.
+  /// If the closest stop belongs to the morning route -> morning is active.
+  /// Otherwise, evening is active.
+  void _detectDirectionAndFilter() {
+    if (_allStops.isEmpty) {
+      _stops = [];
+      return;
+    }
+
+    // If we don't have a location yet, fall back to current time
+    if (_lat == null || _lng == null) {
+      _direction = _directionFromTime();
+    } else {
+      // Find the closest stop across ALL stops (both directions)
+      double bestDist = double.infinity;
+      String? nearestDirection;
+
+      for (final stop in _allStops) {
+        final stopLat = (stop['latitude'] as num?)?.toDouble();
+        final stopLng = (stop['longitude'] as num?)?.toDouble();
+        if (stopLat == null || stopLng == null) continue;
+
+        final d = GeoUtils.distanceInMeters(_lat!, _lng!, stopLat, stopLng);
+        if (d < bestDist) {
+          bestDist = d;
+          nearestDirection = stop['direction']?.toString();
+        }
+      }
+
+      _direction = nearestDirection ?? _directionFromTime();
+    }
+
+    // Filter stops by the active direction
+    _stops = _allStops
+        .where((s) => (s['direction']?.toString() ?? 'morning') == _direction)
+        .toList();
+
+    // Sort by sequence
+    _stops.sort((a, b) {
+      final sa = (a['sequence'] as num?)?.toInt() ?? 999999;
+      final sb = (b['sequence'] as num?)?.toInt() ?? 999999;
+      return sa.compareTo(sb);
+    });
+
+    // Reset current stop index when direction changes
+    _currentStopIndex = 0;
+  }
+
+  String _directionFromTime() {
+    final hour = DateTime.now().hour;
+    // Before 12 PM -> morning, after -> evening
+    return hour < 12 ? 'morning' : 'evening';
   }
 
   Future<void> _refreshLocation() async {
@@ -82,20 +154,23 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
         _lng = (loc['longitude'] as num?)?.toDouble();
         _speed = (loc['speed'] as num?)?.toDouble();
         _updatedAt = DateTime.tryParse(loc['updated_at']?.toString() ?? '');
+
+        // Re-detect direction if stops are loaded
+        if (_allStops.isNotEmpty) {
+          _detectDirectionAndFilter();
+        }
         _recomputeCurrentStop();
       });
     }
   }
 
-  /// Find which stop is closest to the driver's current location.
-  /// Only considers stops that haven't been passed yet.
+  /// Find which stop in the active direction is closest to the driver.
   void _recomputeCurrentStop() {
     if (_stops.isEmpty || _lat == null || _lng == null) return;
 
     double bestDist = double.infinity;
     int bestIndex = _currentStopIndex;
 
-    // Only search from current index onward so we don't un-pass stops
     for (int i = _currentStopIndex; i < _stops.length; i++) {
       final stopLat = (_stops[i]['latitude'] as num?)?.toDouble();
       final stopLng = (_stops[i]['longitude'] as num?)?.toDouble();
@@ -108,7 +183,7 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
       }
     }
 
-    // Advance to the next stop only if we're within 100m of it
+    // Auto-advance to the next stop when within 100 m
     if (bestIndex == _currentStopIndex && bestDist < 100) {
       _currentStopIndex = (bestIndex + 1).clamp(0, _stops.length - 1);
     } else {
@@ -116,11 +191,11 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
     }
   }
 
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------
   // Formatting helpers
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------
   String _formatUpdated() {
-    if (_updatedAt == null) return '—';
+    if (_updatedAt == null) return '--';
     final diff = DateTime.now().difference(_updatedAt!);
     if (diff.inSeconds < 60) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
@@ -143,10 +218,8 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
     return minutes.ceil();
   }
 
-  /// Total remaining distance to the last stop.
   double? get _totalRemainingDistance {
     if (_stops.isEmpty || _lat == null || _lng == null) return null;
-    // Sum the straight-line segments from driver → current → next → ... → last
     double total = 0;
     double prevLat = _lat!;
     double prevLng = _lng!;
@@ -171,9 +244,9 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
     return minutes.ceil();
   }
 
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------
   // Build
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -194,12 +267,28 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
               ),
             ),
             Text(
-              widget.bus.routeName,
+              '${widget.bus.routeName} - ${_direction == 'morning' ? 'Morning' : 'Evening'}',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              await _refreshLocation();
+              await _loadStops();
+              if (!mounted) return;
+              messenger.showSnackBar(
+                const SnackBar(
+                  content: Text('Updated'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+            icon: const Icon(Icons.refresh_rounded, color: Colors.black87),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Container(
@@ -218,6 +307,7 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
           : RefreshIndicator(
               onRefresh: _refreshLocation,
               child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
                   _buildLiveBanner(),
@@ -344,7 +434,7 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
                           ? 'Last known location'
                           : (_lat != null && _lng != null
                               ? '${_lat!.toStringAsFixed(4)}, ${_lng!.toStringAsFixed(4)}'
-                              : '—'),
+                              : '--'),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -357,7 +447,7 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
                           ? 'Driver stopped sharing location'
                           : (_speed != null
                               ? 'Speed: ${_speed!.toStringAsFixed(1)} km/h'
-                              : 'Speed: —'),
+                              : 'Speed: --'),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.8),
                         fontSize: 12,
@@ -378,7 +468,7 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
                       _totalEtaMinutes != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      '${GeoUtils.formatDistance(_totalRemainingDistance!)} • $_totalEtaMinutes min to end',
+                      '${GeoUtils.formatDistance(_totalRemainingDistance!)} - $_totalEtaMinutes min to end',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,
@@ -466,8 +556,7 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
                 Expanded(
                   child: Container(
                     width: 2,
-                    color:
-                        isPassed ? Colors.green : Colors.grey.shade300,
+                    color: isPassed ? Colors.green : Colors.grey.shade300,
                   ),
                 ),
             ],
@@ -512,7 +601,7 @@ class _BusDetailScreenState extends State<BusDetailScreen> {
                   const SizedBox(height: 4),
                   if (isCurrent && distance != null)
                     Text(
-                      'You are here • ${GeoUtils.formatDistance(distance)} to this stop',
+                      'You are here - ${GeoUtils.formatDistance(distance)} to this stop',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.primary,

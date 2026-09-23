@@ -29,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadData();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _silentRefresh();
     });
   }
@@ -77,28 +77,62 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: _loadData,
-      child: _isLoadingBuses
-          ? const Center(child: CircularProgressIndicator())
-          : _busError != null
-              ? _buildErrorState()
-              : _buses.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _buses.length,
-                      itemBuilder: (context, index) =>
-                          _buildBusCard(_buses[index]),
-                    ),
-    );
-  }
+ @override
+Widget build(BuildContext context) {
+  return RefreshIndicator(
+    color: AppColors.primary,
+    onRefresh: _loadData,
+    child: Column(
+      children: [
+        // Header with refresh button
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Your Institution Buses',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Refresh now',
+                onPressed: _loadData,
+                icon: const Icon(
+                  Icons.refresh_rounded,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _isLoadingBuses
+              ? const Center(child: CircularProgressIndicator())
+              : _busError != null
+                  ? _buildErrorState()
+                  : _buses.isEmpty
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _buses.length,
+                          itemBuilder: (context, index) =>
+                              _buildBusCard(_buses[index]),
+                        ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildBusCard(BusInfo bus) {
-  final bool isLive = bus.isLive;
+  // Re-evaluate live status based on the actual age of the last location
+    final bool isLive = bus.locationUpdatedAt != null &&
+    DateTime.now().difference(bus.locationUpdatedAt!).inSeconds < 40;
 
   return Container(
     margin: const EdgeInsets.only(bottom: 20),
@@ -338,16 +372,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return const Center(
+ Widget _buildEmptyState() {
+  return SingleChildScrollView(
+    physics: const AlwaysScrollableScrollPhysics(),
+    child: Padding(
+      padding: const EdgeInsets.all(40),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.directions_bus_outlined, size: 80, color: Colors.grey),
-          SizedBox(height: 16),
-          Text('No buses available for your institution.'),
+          const Icon(Icons.directions_bus_outlined,
+              size: 80, color: Colors.grey),
+          const SizedBox(height: 16),
+          Text(
+            'No buses available for your institution.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

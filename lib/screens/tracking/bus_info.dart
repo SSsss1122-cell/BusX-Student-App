@@ -46,9 +46,9 @@ class BusInfo {
       updatedAt = DateTime.tryParse(location['updated_at'].toString());
     }
 
-    // Consider live only if a GPS ping arrived in the last 5 minutes
+    // Consider live only if a GPS ping arrived in the last 40 seconds
     final isLive = updatedAt != null &&
-        DateTime.now().difference(updatedAt).inSeconds < 120;
+        DateTime.now().difference(updatedAt).inSeconds < 40;
 
     return BusInfo(
       id: map['id']?.toString() ?? '',
