@@ -1,11 +1,10 @@
-
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/bus_stop.dart';
 import '../../services/bus_service.dart';
 import '../../theme/app_colors.dart';
 import 'bus_info.dart';
-import 'geo_utils.dart';
 
 class BusDetailScreen extends StatefulWidget {
   final BusInfo bus;
@@ -16,640 +15,310 @@ class BusDetailScreen extends StatefulWidget {
   State<BusDetailScreen> createState() => _BusDetailScreenState();
 }
 
-class _BusDetailScreenState extends State<BusDetailScreen> {
-  final BusService _busService = BusService();
-  Timer? _timer;
-  Timer? _uiTicker;
+class _BusDetailScreenState extends State<BusDetailScreen>
+    with SingleTickerProviderStateMixin {
+  final _busService = BusService();
+  late TabController _tab;
 
-  // Currently active direction ('morning' or 'evening')
-  String _direction = 'morning';
-
-  // All stops for this bus (both directions)
-  List<Map<String, dynamic>> _allStops = [];
-
-  // Stops filtered to the active direction, ordered by sequence
-  List<Map<String, dynamic>> _stops = [];
-
-  int _currentStopIndex = 0;
+  List<BusStop> _morningStops = [];
+  List<BusStop> _eveningStops = [];
   bool _loading = true;
-
-  double? _lat;
-  double? _lng;
-  DateTime? _updatedAt;
-  double? _speed;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-
-    _lat = widget.bus.latitude;
-    _lng = widget.bus.longitude;
-    _updatedAt = widget.bus.locationUpdatedAt;
-    _speed = widget.bus.speed;
-
+    _tab = TabController(length: 2, vsync: this);
     _loadStops();
-    _refreshLocation();
-
-    // 10-second data refresh
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) {
-      _refreshLocation();
-    });
-
-    // 1-second UI tick so the signal-lost banner updates immediately
-    _uiTicker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    _uiTicker?.cancel();
+    _tab.dispose();
     super.dispose();
   }
 
-  // ---------------------------------------------
-  // Signal staleness (40s = driver stopped)
-  // ---------------------------------------------
-  bool get _isSignalStale {
-    if (_updatedAt == null) return true;
-    return DateTime.now().difference(_updatedAt!).inSeconds > 40;
-  }
-
-  // ---------------------------------------------
-  // Data loading
-  // ---------------------------------------------
   Future<void> _loadStops() async {
-    final allStops = await _busService.getAllStops(widget.bus.id);
-    if (!mounted) return;
-
     setState(() {
-      _allStops = allStops;
-      _loading = false;
-      _detectDirectionAndFilter();
-      _recomputeCurrentStop();
+      _loading = true;
+      _error = null;
     });
-  }
 
-  /// Determine the direction based on the driver's closest stop.
-  /// If the closest stop belongs to the morning route -> morning is active.
-  /// Otherwise, evening is active.
-  void _detectDirectionAndFilter() {
-    if (_allStops.isEmpty) {
-      _stops = [];
-      return;
-    }
+    try {
+      final routeId = widget.bus.routeId;
 
-    // If we don't have a location yet, fall back to current time
-    if (_lat == null || _lng == null) {
-      _direction = _directionFromTime();
-    } else {
-      // Find the closest stop across ALL stops (both directions)
-      double bestDist = double.infinity;
-      String? nearestDirection;
+      List<BusStop> allStops;
 
-      for (final stop in _allStops) {
-        final stopLat = (stop['latitude'] as num?)?.toDouble();
-        final stopLng = (stop['longitude'] as num?)?.toDouble();
-        if (stopLat == null || stopLng == null) continue;
+      if (routeId != null && routeId.isNotEmpty) {
+        // Preferred: fetch by route_id
+        final res = await Supabase.instance.client
+            .from('bus_stops')
+            .select()
+            .eq('route_id', routeId)
+            .order('sequence', ascending: true);
 
-        final d = GeoUtils.distanceInMeters(_lat!, _lng!, stopLat, stopLng);
-        if (d < bestDist) {
-          bestDist = d;
-          nearestDirection = stop['direction']?.toString();
-        }
+        allStops = (res as List)
+            .map((e) => BusStop.fromMap(e as Map<String, dynamic>))
+            .toList();
+      } else {
+        // Fallback: fetch by bus_id
+        allStops = await _busService.getAllStops(widget.bus.id);
       }
 
-      _direction = nearestDirection ?? _directionFromTime();
-    }
+      final morning = allStops
+          .where((s) => s.direction.trim().toLowerCase() == 'morning')
+          .toList();
 
-    // Filter stops by the active direction
-    _stops = _allStops
-        .where((s) => (s['direction']?.toString() ?? 'morning') == _direction)
-        .toList();
+      final evening = allStops
+          .where((s) => s.direction.trim().toLowerCase() == 'evening')
+          .toList();
 
-    // Sort by sequence
-    _stops.sort((a, b) {
-      final sa = (a['sequence'] as num?)?.toInt() ?? 999999;
-      final sb = (b['sequence'] as num?)?.toInt() ?? 999999;
-      return sa.compareTo(sb);
-    });
-
-    // Reset current stop index when direction changes
-    _currentStopIndex = 0;
-  }
-
-  String _directionFromTime() {
-    final hour = DateTime.now().hour;
-    // Before 12 PM -> morning, after -> evening
-    return hour < 12 ? 'morning' : 'evening';
-  }
-
-  Future<void> _refreshLocation() async {
-    final loc = await _busService.getLatestLocation(widget.bus.id);
-    if (!mounted) return;
-    if (loc != null) {
+      if (!mounted) return;
       setState(() {
-        _lat = (loc['latitude'] as num?)?.toDouble();
-        _lng = (loc['longitude'] as num?)?.toDouble();
-        _speed = (loc['speed'] as num?)?.toDouble();
-        _updatedAt = DateTime.tryParse(loc['updated_at']?.toString() ?? '');
-
-        // Re-detect direction if stops are loaded
-        if (_allStops.isNotEmpty) {
-          _detectDirectionAndFilter();
-        }
-        _recomputeCurrentStop();
+        _morningStops = morning;
+        _eveningStops = evening;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
       });
     }
   }
 
-  /// Find which stop in the active direction is closest to the driver.
-  void _recomputeCurrentStop() {
-    if (_stops.isEmpty || _lat == null || _lng == null) return;
-
-    double bestDist = double.infinity;
-    int bestIndex = _currentStopIndex;
-
-    for (int i = _currentStopIndex; i < _stops.length; i++) {
-      final stopLat = (_stops[i]['latitude'] as num?)?.toDouble();
-      final stopLng = (_stops[i]['longitude'] as num?)?.toDouble();
-      if (stopLat == null || stopLng == null) continue;
-
-      final d = GeoUtils.distanceInMeters(_lat!, _lng!, stopLat, stopLng);
-      if (d < bestDist) {
-        bestDist = d;
-        bestIndex = i;
-      }
-    }
-
-    // Auto-advance to the next stop when within 100 m
-    if (bestIndex == _currentStopIndex && bestDist < 100) {
-      _currentStopIndex = (bestIndex + 1).clamp(0, _stops.length - 1);
-    } else {
-      _currentStopIndex = bestIndex;
-    }
-  }
-
-  // ---------------------------------------------
-  // Formatting helpers
-  // ---------------------------------------------
-  String _formatUpdated() {
-    if (_updatedAt == null) return '--';
-    final diff = DateTime.now().difference(_updatedAt!);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    return '${diff.inHours} hr ago';
-  }
-
-  double? _distanceToStop(Map<String, dynamic> stop) {
-    if (_lat == null || _lng == null) return null;
-    final stopLat = (stop['latitude'] as num?)?.toDouble();
-    final stopLng = (stop['longitude'] as num?)?.toDouble();
-    if (stopLat == null || stopLng == null) return null;
-    return GeoUtils.distanceInMeters(_lat!, _lng!, stopLat, stopLng);
-  }
-
-  int? _etaToStop(Map<String, dynamic> stop) {
-    final meters = _distanceToStop(stop);
-    if (meters == null) return null;
-    final speedKmh = (_speed != null && _speed! > 5) ? _speed! : 25.0;
-    final minutes = (meters / 1000) / speedKmh * 60;
-    return minutes.ceil();
-  }
-
-  double? get _totalRemainingDistance {
-    if (_stops.isEmpty || _lat == null || _lng == null) return null;
-    double total = 0;
-    double prevLat = _lat!;
-    double prevLng = _lng!;
-
-    for (int i = _currentStopIndex; i < _stops.length; i++) {
-      final stopLat = (_stops[i]['latitude'] as num?)?.toDouble();
-      final stopLng = (_stops[i]['longitude'] as num?)?.toDouble();
-      if (stopLat == null || stopLng == null) continue;
-      total += GeoUtils.distanceInMeters(prevLat, prevLng, stopLat, stopLng);
-      prevLat = stopLat;
-      prevLng = stopLng;
-    }
-
-    return total == 0 ? null : total;
-  }
-
-  int? get _totalEtaMinutes {
-    final meters = _totalRemainingDistance;
-    if (meters == null) return null;
-    final speedKmh = (_speed != null && _speed! > 5) ? _speed! : 25.0;
-    final minutes = (meters / 1000) / speedKmh * 60;
-    return minutes.ceil();
-  }
-
-  // ---------------------------------------------
-  // Build
-  // ---------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        title: Text('Bus ${widget.bus.busNumber}'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
         elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Bus ${widget.bus.busNumber}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-            Text(
-              '${widget.bus.routeName} - ${_direction == 'morning' ? 'Morning' : 'Evening'}',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
+        bottom: TabBar(
+          controller: _tab,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          tabs: const [
+            Tab(text: 'Morning'),
+            Tab(text: 'Evening'),
           ],
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              await _refreshLocation();
-              await _loadStops();
-              if (!mounted) return;
-              messenger.showSnackBar(
-                const SnackBar(
-                  content: Text('Updated'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            },
-            icon: const Icon(Icons.refresh_rounded, color: Colors.black87),
+      ),
+      body: Column(
+        children: [
+          _buildBusHeader(),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _buildError()
+                    : TabBarView(
+                        controller: _tab,
+                        children: [
+                          _stopsList(_morningStops, 'morning'),
+                          _stopsList(_eveningStops, 'evening'),
+                        ],
+                      ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: _isSignalStale ? Colors.orange : Colors.green,
-                shape: BoxShape.circle,
+        ],
+      ),
+    );
+  }
+
+  // -----------------------------------------------------------------
+  // BUS HEADER
+  // -----------------------------------------------------------------
+  Widget _buildBusHeader() {
+    final bus = widget.bus;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.directions_bus_rounded,
+              color: AppColors.primary,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Bus ${bus.busNumber}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  (bus.routeName == null || bus.routeName!.isEmpty)
+                      ? 'No route'
+                      : bus.routeName!,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: (bus.isActive ? Colors.green : Colors.grey)
+                  .withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              bus.isActive ? 'ACTIVE' : 'INACTIVE',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: bus.isActive
+                    ? Colors.green.shade700
+                    : Colors.grey.shade700,
+                letterSpacing: 0.5,
               ),
             ),
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _refreshLocation,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildLiveBanner(),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'ROUTE TIMELINE',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                          color: Colors.black54,
-                        ),
-                      ),
-                      Text(
-                        '${_stops.length} stops',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  if (_stops.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text(
-                        'No route stops configured for this bus.',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
-                  else
-                    ..._stops.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final stop = entry.value;
-                      final isLast = index == _stops.length - 1;
-                      return _buildStopTile(stop, index, isLast);
-                    }),
-                ],
-              ),
-            ),
     );
   }
 
-  Widget _buildLiveBanner() {
-    final stale = _isSignalStale;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: stale
-              ? [Colors.grey.shade700, Colors.grey.shade500]
-              : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  // -----------------------------------------------------------------
+  // ERROR
+  // -----------------------------------------------------------------
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline_rounded,
+                size: 56, color: Colors.red.shade400),
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _loadStops,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.directions_bus, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
+    );
+  }
+
+  // -----------------------------------------------------------------
+  // STOPS LIST
+  // -----------------------------------------------------------------
+  Widget _stopsList(List<BusStop> stops, String direction) {
+    if (stops.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadStops,
+        color: AppColors.primary,
+        child: ListView(
+          children: [
+            const SizedBox(height: 100),
+            Center(
+              child: Column(
+                children: [
+                  Icon(
+                    direction == 'morning'
+                        ? Icons.wb_sunny_rounded
+                        : Icons.nights_stay_rounded,
+                    size: 44,
+                    color: AppColors.primary.withValues(alpha: 0.6),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'No ${direction == 'morning' ? 'morning' : 'evening'} stops',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadStops,
+      color: AppColors.primary,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(12),
+        itemCount: stops.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 6),
+        itemBuilder: (_, i) {
+          final s = stops[i];
+          return Card(
+            elevation: 0,
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade200),
+            ),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primary.withValues(alpha: 0.12),
                 child: Text(
-                  'Bus ${widget.bus.busNumber}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
+                  '${s.sequence}',
+                  style: TextStyle(
+                    color: AppColors.primary,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.circle,
-                      size: 8,
-                      color: stale ? Colors.orange : Colors.white,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      stale ? 'SIGNAL LOST' : 'LIVE',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+              title: Text(
+                s.stopName,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.bus.routeName,
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      stale
-                          ? 'Last known location'
-                          : (_lat != null && _lng != null
-                              ? '${_lat!.toStringAsFixed(4)}, ${_lng!.toStringAsFixed(4)}'
-                              : '--'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      stale
-                          ? 'Driver stopped sharing location'
-                          : (_speed != null
-                              ? 'Speed: ${_speed!.toStringAsFixed(1)} km/h'
-                              : 'Speed: --'),
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Updated ${_formatUpdated()}',
-                    style: const TextStyle(color: Colors.white, fontSize: 11),
-                  ),
-                  if (!stale &&
-                      _totalRemainingDistance != null &&
-                      _totalEtaMinutes != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '${GeoUtils.formatDistance(_totalRemainingDistance!)} - $_totalEtaMinutes min to end',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStopTile(Map<String, dynamic> stop, int index, bool isLast) {
-    final stopName = stop['stop_name']?.toString() ?? 'Stop ${index + 1}';
-
-    final isCurrent = index == _currentStopIndex;
-    final isPassed = index < _currentStopIndex;
-    final isUpcoming = index > _currentStopIndex;
-
-    final distance = _distanceToStop(stop);
-    final eta = isUpcoming ? _etaToStop(stop) : null;
-
-    Color circleColor;
-    Color circleBorder;
-    Color? iconColor;
-    String statusLabel;
-    Color statusBg;
-    Color statusText;
-
-    if (isCurrent) {
-      circleColor = AppColors.primary;
-      circleBorder = AppColors.primary;
-      statusLabel = 'Current';
-      statusBg = AppColors.primary.withValues(alpha: 0.1);
-      statusText = AppColors.primary;
-    } else if (isPassed) {
-      circleColor = Colors.green;
-      circleBorder = Colors.green;
-      iconColor = Colors.white;
-      statusLabel = 'Passed';
-      statusBg = Colors.green.withValues(alpha: 0.1);
-      statusText = Colors.green;
-    } else {
-      circleColor = Colors.white;
-      circleBorder = Colors.grey.shade300;
-      statusLabel = 'Next';
-      statusBg = Colors.grey.shade100;
-      statusText = Colors.grey.shade700;
-    }
-
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: circleColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: circleBorder, width: 2),
-                ),
-                child: Center(
-                  child: isCurrent
-                      ? const Icon(Icons.directions_bus,
-                          color: Colors.white, size: 18)
-                      : isPassed
-                          ? Icon(Icons.check, color: iconColor, size: 18)
-                          : Text(
-                              '${index + 1}',
-                              style: TextStyle(
-                                color: Colors.grey.shade700,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                ),
-              ),
-              if (!isLast)
-                Expanded(
-                  child: Container(
-                    width: 2,
-                    color: isPassed ? Colors.green : Colors.grey.shade300,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 6, bottom: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          stopName,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: isPassed ? Colors.grey : Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: statusBg,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          statusLabel,
-                          style: TextStyle(
-                            color: statusText,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  if (isCurrent && distance != null)
-                    Text(
-                      'You are here - ${GeoUtils.formatDistance(distance)} to this stop',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    )
-                  else if (isUpcoming && distance != null)
-                    Row(
-                      children: [
-                        Icon(Icons.route,
-                            size: 12, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${GeoUtils.formatDistance(distance)} away',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        if (eta != null) ...[
-                          const SizedBox(width: 10),
-                          Icon(Icons.schedule,
-                              size: 12, color: Colors.grey.shade600),
-                          const SizedBox(width: 4),
-                          Text(
-                            'ETA $eta min',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    )
-                  else if (isPassed)
-                    Text(
-                      'Visited',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.green.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                ],
-              ),
+              subtitle: (s.landmark != null && s.landmark!.isNotEmpty)
+                  ? Text(s.landmark!)
+                  : null,
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

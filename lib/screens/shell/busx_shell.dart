@@ -8,6 +8,7 @@ import '../complaints/complaints_screen.dart';
 import '../announcements/announcements_screen.dart';
 import '../notices/notices_screen.dart';
 import '../fees/fees_screen.dart';
+import '../stops/stops_screen.dart';       // ← NEW
 import '../login/login_screen.dart';
 
 class BusXShell extends StatefulWidget {
@@ -22,13 +23,15 @@ class _BusXShellState extends State<BusXShell> {
   Student? _student;
 
   final List<Widget> _screens = const [
-    HomeScreen(),
-    FeesScreen(),
-    ProfileScreen(),
+    HomeScreen(),        // 0
+    StopsScreen(),       // 1  ← NEW
+    FeesScreen(),        // 2
+    ProfileScreen(),     // 3
   ];
 
   final List<String> _titles = const [
     'Live Tracking',
+    'Bus Stops',         // ← NEW
     'Fees',
     'My Profile',
   ];
@@ -85,6 +88,10 @@ class _BusXShellState extends State<BusXShell> {
             label: 'Tracking',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.route_rounded),      // ← NEW
+            label: 'Stops',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long_rounded),
             label: 'Fees',
           ),
@@ -98,11 +105,9 @@ class _BusXShellState extends State<BusXShell> {
   }
 
   Widget _buildDrawer() {
-    // Fallbacks while the student loads
     final displayName = _student?.fullName ?? 'Student';
     final displayUsn = _student?.usn ?? '—';
 
-    // Initials for the avatar (e.g. "John Doe" → "JD")
     final initials = displayName
         .trim()
         .split(RegExp(r'\s+'))
@@ -165,14 +170,28 @@ class _BusXShellState extends State<BusXShell> {
               ],
             ),
           ),
-          _drawerItem(Icons.person_outline, 'Profile', () {
+
+          // ---- Bottom-nav tabs (switch index, don't push) ----
+          _drawerItem(Icons.location_on_outlined, 'Tracking', () {
             Navigator.pop(context);
-            setState(() => _currentIndex = 2);
+            setState(() => _currentIndex = 0);
           }),
-          _drawerItem(Icons.receipt_long_outlined, 'Fees', () {
+          _drawerItem(Icons.route_outlined, 'Bus Stops', () {     // ← NEW
             Navigator.pop(context);
             setState(() => _currentIndex = 1);
           }),
+          _drawerItem(Icons.receipt_long_outlined, 'Fees', () {
+            Navigator.pop(context);
+            setState(() => _currentIndex = 2);
+          }),
+          _drawerItem(Icons.person_outline, 'Profile', () {
+            Navigator.pop(context);
+            setState(() => _currentIndex = 3);
+          }),
+
+          const Divider(),
+
+          // ---- Pushed screens ----
           _drawerItem(Icons.report_problem_outlined, 'Complaints', () {
             Navigator.pop(context);
             Navigator.push(context,
@@ -188,7 +207,9 @@ class _BusXShellState extends State<BusXShell> {
             Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const NoticesScreen()));
           }),
+
           const Divider(),
+
           _drawerItem(Icons.settings_outlined, 'Settings',
               () => Navigator.pop(context)),
           _drawerItem(Icons.logout_rounded, 'Logout', () async {

@@ -1,10 +1,13 @@
-﻿
-import 'package:supabase_flutter/supabase_flutter.dart';
-
+﻿import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/bus_stop.dart';
 import '../screens/tracking/bus_info.dart';
 
 class BusService {
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  // ============================================================
+  // BUSES
+  // ============================================================
 
   /// Fetch all buses for an institution, with their latest location attached.
   Future<List<BusInfo>> getInstitutionBuses(String institutionId) async {
@@ -22,14 +25,13 @@ class BusService {
 
       Map<String, dynamic>? latestLocation;
       try {
-        final locResponse = await _supabase
+        latestLocation = await _supabase
             .from('bus_locations')
             .select()
             .eq('bus_id', busId)
             .order('updated_at', ascending: false)
             .limit(1)
             .maybeSingle();
-        latestLocation = locResponse;
       } catch (_) {
         latestLocation = null;
       }
@@ -43,22 +45,24 @@ class BusService {
   /// Fetch live location for a specific bus.
   Future<Map<String, dynamic>?> getLatestLocation(String busId) async {
     try {
-      final res = await _supabase
+      return await _supabase
           .from('bus_locations')
           .select()
           .eq('bus_id', busId)
           .order('updated_at', ascending: false)
           .limit(1)
           .maybeSingle();
-      return res;
     } catch (_) {
       return null;
     }
   }
 
+  // ============================================================
+  // STOPS
+  // ============================================================
+
   /// Fetch ALL stops for a bus (both morning and evening).
-  /// The caller decides which direction to display based on context.
-  Future<List<Map<String, dynamic>>> getAllStops(String busId) async {
+  Future<List<BusStop>> getAllStops(String busId) async {
     try {
       final res = await _supabase
           .from('bus_stops')
@@ -66,18 +70,16 @@ class BusService {
           .eq('bus_id', busId)
           .order('sequence', ascending: true);
 
-      final list = List<Map<String, dynamic>>.from(res);
-      // Filter out rows that don't belong to this bus
-      list.removeWhere((s) => s['bus_id'] == null);
-      return list;
+      return (res as List)
+          .map((e) => BusStop.fromMap(e as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return [];
     }
   }
 
-  /// Fetch stops for a specific direction ('morning' or 'evening'),
-  /// strictly ordered by sequence.
-  Future<List<Map<String, dynamic>>> getBusStops(
+  /// Fetch stops for a bus filtered by direction ('morning' or 'evening').
+  Future<List<BusStop>> getBusStops(
     String busId, {
     String? direction,
   }) async {
@@ -93,22 +95,17 @@ class BusService {
 
       final res = await query.order('sequence', ascending: true);
 
-      final list = List<Map<String, dynamic>>.from(res)
-          .where((s) => s['bus_id'] != null)
+      return (res as List)
+          .map((e) => BusStop.fromMap(e as Map<String, dynamic>))
           .toList();
-
-      // Defensive client-side sort
-      list.sort((a, b) {
-        final sa = (a['sequence'] as num?)?.toInt() ?? 999999;
-        final sb = (b['sequence'] as num?)?.toInt() ?? 999999;
-        return sa.compareTo(sb);
-      });
-
-      return list;
     } catch (_) {
       return [];
     }
   }
+
+  // ============================================================
+  // STUDENT BUS (stub)
+  // ============================================================
 
   Future<BusInfo?> getStudentBus(String studentId) async {
     return null;

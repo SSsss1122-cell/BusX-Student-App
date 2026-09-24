@@ -13,7 +13,7 @@ class AuthService {
         .from('students_new')
         .select(
           'id, full_name, usn, branch, phone, email, role, '
-          'institution_id, current_interval_id, routes, semester',
+          'institution_id, current_interval_id, routes, semester, route_id',
         )
         .eq('usn', usn)
         .eq('password', password)

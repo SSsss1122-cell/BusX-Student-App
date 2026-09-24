@@ -1,72 +1,79 @@
 class BusInfo {
   final String id;
   final String busNumber;
-  final String routeName;
-  final String institutionId;
-  final bool isActive;
-  final bool isLive;             // ?? NEW: true only if bus sent GPS ping recently
-  final String? imageUrl;
-  final String? driverId;
+  final String? routeName;
+  final String? routeId;
+  final String? driverName;
   final String? capacity;
   final String? fuelType;
+  final bool isActive;
 
-  // Latest live location (if any)
   final double? latitude;
   final double? longitude;
   final double? speed;
   final DateTime? locationUpdatedAt;
-  final String? driverName;
-  final String? driverContact;
+  final String? imageUrl;
 
-  const BusInfo({
+  BusInfo({
     required this.id,
     required this.busNumber,
-    required this.routeName,
-    required this.institutionId,
-    required this.isActive,
-    required this.isLive,
-    this.imageUrl,
-    this.driverId,
+    this.routeName,
+    this.routeId,
+    this.driverName,
     this.capacity,
     this.fuelType,
+    this.isActive = true,
     this.latitude,
     this.longitude,
     this.speed,
     this.locationUpdatedAt,
-    this.driverName,
-    this.driverContact,
+    this.imageUrl,
   });
 
   factory BusInfo.fromMap(
     Map<String, dynamic> map, {
     Map<String, dynamic>? location,
   }) {
-    DateTime? updatedAt;
-    if (location != null && location['updated_at'] != null) {
-      updatedAt = DateTime.tryParse(location['updated_at'].toString());
-    }
-
-    // Consider live only if a GPS ping arrived in the last 40 seconds
-    final isLive = updatedAt != null &&
-        DateTime.now().difference(updatedAt).inSeconds < 40;
-
     return BusInfo(
-      id: map['id']?.toString() ?? '',
-      busNumber: map['bus_number']?.toString() ?? '',
-      routeName: map['route_name']?.toString() ?? '',
-      institutionId: map['institution_id']?.toString() ?? '',
-      isActive: map['is_active'] == true,
-      isLive: isLive,
-      imageUrl: map['image_url']?.toString(),
-      driverId: map['driver_id']?.toString(),
+      id: map['id'] as String,
+      busNumber: (map['bus_number'] as String?) ?? '—',
+      routeName: map['route_name'] as String?,
+      routeId: map['route_id'] as String?,
+      driverName: null,
       capacity: map['capacity']?.toString(),
-      fuelType: map['fuel_type']?.toString(),
-      latitude: (location?['latitude'] as num?)?.toDouble(),
-      longitude: (location?['longitude'] as num?)?.toDouble(),
-      speed: (location?['speed'] as num?)?.toDouble(),
-      locationUpdatedAt: updatedAt,
-      driverName: location?['driver_name']?.toString(),
-      driverContact: location?['driver_contact']?.toString(),
+      fuelType: map['fuel_type'] as String?,
+      isActive: map['is_active'] as bool? ?? true,
+      latitude: location != null
+          ? (location['latitude'] as num?)?.toDouble()
+          : null,
+      longitude: location != null
+          ? (location['longitude'] as num?)?.toDouble()
+          : null,
+      speed: location != null
+          ? (location['speed'] as num?)?.toDouble()
+          : null,
+      locationUpdatedAt: location != null && location['updated_at'] != null
+          ? DateTime.tryParse(location['updated_at'].toString())
+          : null,
+      imageUrl: map['image_url'] as String?,
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'bus_number': busNumber,
+      'route_name': routeName,
+      'route_id': routeId,
+      'driver_name': driverName,
+      'capacity': capacity,
+      'fuel_type': fuelType,
+      'is_active': isActive,
+      'latitude': latitude,
+      'longitude': longitude,
+      'speed': speed,
+      'updated_at': locationUpdatedAt?.toIso8601String(),
+      'image_url': imageUrl,
+    };
   }
 }

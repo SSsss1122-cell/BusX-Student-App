@@ -9,6 +9,7 @@ class Student {
   final String institutionId;
   final String? currentIntervalId;
   final String? routes;
+  final String? routeId;
   final String? semester;
 
   Student({
@@ -22,6 +23,7 @@ class Student {
     this.role,
     this.currentIntervalId,
     this.routes,
+    this.routeId,
     this.semester,
   });
 
@@ -37,6 +39,7 @@ class Student {
       role: map['role'] as String?,
       currentIntervalId: map['current_interval_id'] as String?,
       routes: map['routes'] as String?,
+      routeId: map['route_id'] as String?,
       semester: map['semester'] as String?,
     );
   }
@@ -53,6 +56,7 @@ class Student {
       'role': role,
       'current_interval_id': currentIntervalId,
       'routes': routes,
+      'route_id': routeId,
       'semester': semester,
     };
   }
