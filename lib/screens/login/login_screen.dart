@@ -1,9 +1,8 @@
-
 import 'package:flutter/material.dart';
 
 import '../../models/student.dart';
 import '../../services/auth_service.dart';
-import '../../services/session_service.dart';
+import '../../services/session_service.dart';     // ← ADD THIS
 import '../../theme/app_theme.dart';
 import '../shell/busx_shell.dart';
 
@@ -69,20 +68,22 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      // --------------------------------------------------------
       // Save logged-in student locally.
+      // --------------------------------------------------------
       await SessionService.saveStudent(student);
 
-if (!mounted) return;
+      if (!mounted) return;
 
-setState(() {
-  _isLoading = false;
-});
+      setState(() {
+        _isLoading = false;
+      });
 
-Navigator.of(context).pushReplacement(
-  MaterialPageRoute(
-    builder: (_) => const BusXShell(),
-  ),
-);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const BusXShell(),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
 
@@ -621,4 +622,3 @@ Navigator.of(context).pushReplacement(
     );
   }
 }
-

@@ -1,11 +1,13 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../models/student.dart';
+import '../../services/session_service.dart';
 import '../../theme/app_colors.dart';
 import '../home/home_screen.dart';
 import '../profile/profile_screen.dart';
 import '../complaints/complaints_screen.dart';
 import '../announcements/announcements_screen.dart';
 import '../notices/notices_screen.dart';
+import '../fees/fees_screen.dart';
 import '../login/login_screen.dart';
 
 class BusXShell extends StatefulWidget {
@@ -17,16 +19,31 @@ class BusXShell extends StatefulWidget {
 
 class _BusXShellState extends State<BusXShell> {
   int _currentIndex = 0;
+  Student? _student;
 
   final List<Widget> _screens = const [
     HomeScreen(),
+    FeesScreen(),
     ProfileScreen(),
   ];
 
   final List<String> _titles = const [
     'Live Tracking',
+    'Fees',
     'My Profile',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStudent();
+  }
+
+  Future<void> _loadStudent() async {
+    final s = await SessionService.getStudent();
+    if (!mounted) return;
+    setState(() => _student = s);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +85,10 @@ class _BusXShellState extends State<BusXShell> {
             label: 'Tracking',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.receipt_long_rounded),
+            label: 'Fees',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.person_rounded),
             label: 'Profile',
           ),
@@ -77,6 +98,19 @@ class _BusXShellState extends State<BusXShell> {
   }
 
   Widget _buildDrawer() {
+    // Fallbacks while the student loads
+    final displayName = _student?.fullName ?? 'Student';
+    final displayUsn = _student?.usn ?? '—';
+
+    // Initials for the avatar (e.g. "John Doe" → "JD")
+    final initials = displayName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .take(2)
+        .map((p) => p[0].toUpperCase())
+        .join();
+
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
@@ -89,28 +123,53 @@ class _BusXShellState extends State<BusXShell> {
                 end: Alignment.bottomRight,
               ),
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: Colors.white24,
-                  child: Icon(Icons.person, color: Colors.white, size: 35),
+                  child: initials.isEmpty
+                      ? const Icon(Icons.person,
+                          color: Colors.white, size: 35)
+                      : Text(
+                          initials,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
-                SizedBox(height: 10),
-                Text('Student Name',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    )),
-                Text('student@sgi.edu',
-                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                const SizedBox(height: 10),
+                Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'USN: $displayUsn',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
           _drawerItem(Icons.person_outline, 'Profile', () {
+            Navigator.pop(context);
+            setState(() => _currentIndex = 2);
+          }),
+          _drawerItem(Icons.receipt_long_outlined, 'Fees', () {
             Navigator.pop(context);
             setState(() => _currentIndex = 1);
           }),
@@ -130,20 +189,17 @@ class _BusXShellState extends State<BusXShell> {
                 MaterialPageRoute(builder: (_) => const NoticesScreen()));
           }),
           const Divider(),
-          _drawerItem(
-              Icons.payment_outlined, 'Fees', () => Navigator.pop(context)),
           _drawerItem(Icons.settings_outlined, 'Settings',
               () => Navigator.pop(context)),
           _drawerItem(Icons.logout_rounded, 'Logout', () async {
-  Navigator.pop(context); // close drawer
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.remove('logged_in_usn');
-  if (!mounted) return;
-  Navigator.of(context).pushAndRemoveUntil(
-    MaterialPageRoute(builder: (_) => const LoginScreen()),
-    (route) => false,
-  );
-}),
+            Navigator.pop(context);
+            await SessionService.logout();
+            if (!mounted) return;
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (route) => false,
+            );
+          }),
         ],
       ),
     );

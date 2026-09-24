@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-
+import '../../services/session_service.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/bus_service.dart';
@@ -42,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _silentRefresh() async {
     try {
-      final student = await _authService.getCurrentStudent();
+final student = await SessionService.getStudent();
       if (student == null) return;
       final buses = await _busService.getInstitutionBuses(student.institutionId);
       if (!mounted) return;
@@ -57,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final student = await _authService.getCurrentStudent();
+      final student = await SessionService.getStudent();
       if (student == null) throw Exception('Student not found');
 
       final buses =

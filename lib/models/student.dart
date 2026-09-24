@@ -14,36 +14,30 @@ class Student {
   Student({
     required this.id,
     required this.fullName,
+    required this.institutionId,
     this.usn,
     this.branch,
     this.phone,
     this.email,
     this.role,
-    required this.institutionId,
     this.currentIntervalId,
     this.routes,
     this.semester,
   });
 
-  factory Student.fromMap(
-    Map<String, dynamic> map,
-  ) {
+  factory Student.fromMap(Map<String, dynamic> map) {
     return Student(
-      id: map['id']?.toString() ?? '',
-      fullName:
-          map['full_name']?.toString() ?? '',
-      usn: map['usn']?.toString(),
-      branch: map['branch']?.toString(),
-      phone: map['phone']?.toString(),
-      email: map['email']?.toString(),
-      role: map['role']?.toString(),
-      institutionId:
-          map['institution_id']?.toString() ?? '',
-      currentIntervalId:
-          map['current_interval_id']?.toString(),
-      routes: map['routes']?.toString(),
-      semester:
-          map['semester']?.toString(),
+      id: map['id'] as String,
+      fullName: map['full_name'] as String? ?? '',
+      institutionId: map['institution_id'] as String,
+      usn: map['usn'] as String?,
+      branch: map['branch'] as String?,
+      phone: map['phone'] as String?,
+      email: map['email'] as String?,
+      role: map['role'] as String?,
+      currentIntervalId: map['current_interval_id'] as String?,
+      routes: map['routes'] as String?,
+      semester: map['semester'] as String?,
     );
   }
 
@@ -51,14 +45,13 @@ class Student {
     return {
       'id': id,
       'full_name': fullName,
+      'institution_id': institutionId,
       'usn': usn,
       'branch': branch,
       'phone': phone,
       'email': email,
       'role': role,
-      'institution_id': institutionId,
-      'current_interval_id':
-          currentIntervalId,
+      'current_interval_id': currentIntervalId,
       'routes': routes,
       'semester': semester,
     };
