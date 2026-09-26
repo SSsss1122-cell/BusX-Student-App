@@ -288,7 +288,7 @@ class _BusDetailScreenState extends State<BusDetailScreen>
       child: ListView.separated(
         padding: const EdgeInsets.all(12),
         itemCount: stops.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
+        separatorBuilder: (_, _) => const SizedBox(height: 6),
         itemBuilder: (_, i) {
           final s = stops[i];
           return Card(

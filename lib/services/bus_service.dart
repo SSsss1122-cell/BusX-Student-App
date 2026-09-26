@@ -42,6 +42,26 @@ class BusService {
     return result;
   }
 
+    /// Fetch a single bus by its id, with its latest location attached.
+  Future<BusInfo?> getBusById(String busId) async {
+    try {
+      final busResponse = await _supabase
+          .from('buses')
+          .select()
+          .eq('id', busId)
+          .maybeSingle();
+
+      if (busResponse == null) return null;
+
+      final latestLocation = await getLatestLocation(busId);
+
+      return BusInfo.fromMap(busResponse, location: latestLocation);
+    } catch (_) {
+      return null;
+    }
+  }
+
+
   /// Fetch live location for a specific bus.
   Future<Map<String, dynamic>?> getLatestLocation(String busId) async {
     try {

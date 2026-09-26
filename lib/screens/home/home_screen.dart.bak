@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/session_service.dart';
 
+import '../../services/auth_service.dart';
 import '../../services/bus_service.dart';
 import '../../theme/app_colors.dart';
 import '../tracking/bus_info.dart';
-import '../tracking/bus_live_tracking_screen.dart';
+import '../tracking/tracking_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final BusService _busService = BusService();
-  
+  final AuthService _authService = AuthService();
   Timer? _refreshTimer;
 
   List<BusInfo> _buses = [];
@@ -324,7 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => BusLiveTrackingScreen(bus: bus),
+                            builder: (_) => TrackingScreen(bus: bus),
                           ),
                         );
                       }

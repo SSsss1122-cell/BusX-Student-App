@@ -83,7 +83,7 @@ class _StopsScreenState extends State<StopsScreen>
       debugPrint('🔍 stops rows returned = ${(res as List).length}');
 
       final all = (res)
-          .map((e) => BusStop.fromMap(e as Map<String, dynamic>))
+          .map((e) => BusStop.fromMap(e))
           .toList();
 
       final morning = all
@@ -171,7 +171,7 @@ class _StopsScreenState extends State<StopsScreen>
             const SizedBox(height: 150),
             Center(
               child: Text(
-                'No ${direction} stops',
+                'No $direction stops',
                 style: TextStyle(color: Colors.grey.shade600),
               ),
             ),
@@ -186,7 +186,7 @@ class _StopsScreenState extends State<StopsScreen>
       child: ListView.separated(
         padding: const EdgeInsets.all(12),
         itemCount: stops.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
+        separatorBuilder: (_, _) => const SizedBox(height: 6),
         itemBuilder: (_, i) {
           final s = stops[i];
           return Card(
