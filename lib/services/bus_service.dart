@@ -9,7 +9,7 @@ class BusService {
   // BUSES
   // ============================================================
 
-  /// Fetch all buses for an institution, with their latest location attached.
+  /// Fetch all buses for an institution, with their latest GPS location attached.
   Future<List<BusInfo>> getInstitutionBuses(String institutionId) async {
     final busesResponse = await _supabase
         .from('buses')
@@ -23,19 +23,7 @@ class BusService {
       final busId = bus['id']?.toString();
       if (busId == null) continue;
 
-      Map<String, dynamic>? latestLocation;
-      try {
-        latestLocation = await _supabase
-            .from('bus_locations')
-            .select()
-            .eq('bus_id', busId)
-            .order('updated_at', ascending: false)
-            .limit(1)
-            .maybeSingle();
-      } catch (_) {
-        latestLocation = null;
-      }
-
+      final latestLocation = await _fetchLatestGpsForBus(busId);
       result.add(BusInfo.fromMap(bus, location: latestLocation));
     }
 
@@ -44,12 +32,31 @@ class BusService {
 
   /// Fetch live location for a specific bus.
   Future<Map<String, dynamic>?> getLatestLocation(String busId) async {
+    return _fetchLatestGpsForBus(busId);
+  }
+
+  /// Internal helper: get the latest GPS ping for a bus.
+  /// Path: buses.id -> gps_devices.bus_id -> gps_locations.device_id
+  Future<Map<String, dynamic>?> _fetchLatestGpsForBus(String busId) async {
     try {
-      return await _supabase
-          .from('bus_locations')
-          .select()
+      // 1. Find the active GPS device assigned to this bus
+      final device = await _supabase
+          .from('gps_devices')
+          .select('id')
           .eq('bus_id', busId)
-          .order('updated_at', ascending: false)
+          .eq('status', 'active')
+          .maybeSingle();
+
+      if (device == null) return null;
+      final deviceId = device['id'];
+      if (deviceId == null) return null;
+
+      // 2. Fetch the latest location from that device
+      return await _supabase
+          .from('gps_locations')
+          .select()
+          .eq('device_id', deviceId)
+          .order('received_at', ascending: false)
           .limit(1)
           .maybeSingle();
     } catch (_) {
@@ -79,15 +86,9 @@ class BusService {
   }
 
   /// Fetch stops for a bus filtered by direction ('morning' or 'evening').
-  Future<List<BusStop>> getBusStops(
-    String busId, {
-    String? direction,
-  }) async {
+  Future<List<BusStop>> getBusStops(String busId, {String? direction}) async {
     try {
-      var query = _supabase
-          .from('bus_stops')
-          .select()
-          .eq('bus_id', busId);
+      var query = _supabase.from('bus_stops').select().eq('bus_id', busId);
 
       if (direction != null && direction.isNotEmpty) {
         query = query.eq('direction', direction);

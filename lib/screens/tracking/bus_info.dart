@@ -49,11 +49,14 @@ class BusInfo {
       longitude: location != null
           ? (location['longitude'] as num?)?.toDouble()
           : null,
-      speed: location != null
-          ? (location['speed'] as num?)?.toDouble()
-          : null,
-      locationUpdatedAt: location != null && location['updated_at'] != null
-          ? DateTime.tryParse(location['updated_at'].toString())
+      speed: location != null ? (location['speed'] as num?)?.toDouble() : null,
+      locationUpdatedAt:
+          location != null &&
+              (location['received_at'] != null ||
+                  location['device_time'] != null)
+          ? DateTime.tryParse(
+              (location['received_at'] ?? location['device_time']).toString(),
+            )
           : null,
       imageUrl: map['image_url'] as String?,
     );
@@ -72,7 +75,7 @@ class BusInfo {
       'latitude': latitude,
       'longitude': longitude,
       'speed': speed,
-      'updated_at': locationUpdatedAt?.toIso8601String(),
+      'received_at': locationUpdatedAt?.toIso8601String(),
       'image_url': imageUrl,
     };
   }

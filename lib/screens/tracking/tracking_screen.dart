@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../models/student.dart';
@@ -12,10 +11,7 @@ import 'bus_info.dart';
 class TrackingScreen extends StatefulWidget {
   final Student student;
 
-  const TrackingScreen({
-    super.key,
-    required this.student,
-  });
+  const TrackingScreen({super.key, required this.student});
 
   @override
   State<TrackingScreen> createState() => _TrackingScreenState();
@@ -56,10 +52,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
       if (!mounted) return;
 
       setState(() {
-        _error = e.toString().replaceFirst(
-              'Exception: ',
-              '',
-            );
+        _error = e.toString().replaceFirst('Exception: ', '');
         _loading = false;
       });
     }
@@ -76,9 +69,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(
-                child: _buildHeader(),
-              ),
+              SliverToBoxAdapter(child: _buildHeader()),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
                   AppDimensions.pagePadding,
@@ -106,11 +97,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.border,
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
@@ -119,10 +106,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
             height: 42,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [
-                  AppColors.primary,
-                  AppColors.primaryLight,
-                ],
+                colors: [AppColors.primary, AppColors.primaryLight],
               ),
               borderRadius: BorderRadius.circular(13),
             ),
@@ -145,18 +129,12 @@ class _TrackingScreenState extends State<TrackingScreen> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                Text(
-                  'Live Bus Tracking',
-                  style: AppTextStyles.small,
-                ),
+                Text('Live Bus Tracking', style: AppTextStyles.small),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(20),
@@ -179,10 +157,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Institution Buses',
-          style: AppTextStyles.heading,
-        ),
+        const Text('Institution Buses', style: AppTextStyles.heading),
         const SizedBox(height: 5),
         Text(
           'Live buses available for your institution',
@@ -223,14 +198,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
       decoration: _cardDecoration(),
       child: const Column(
         children: [
-          CircularProgressIndicator(
-            strokeWidth: 2.5,
-          ),
+          CircularProgressIndicator(strokeWidth: 2.5),
           SizedBox(height: 14),
-          Text(
-            'Loading buses...',
-            style: AppTextStyles.subtitle,
-          ),
+          Text('Loading buses...', style: AppTextStyles.subtitle),
         ],
       ),
     );
@@ -241,27 +211,16 @@ class _TrackingScreenState extends State<TrackingScreen> {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: AppColors.error.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(
-          AppDimensions.cardRadius,
-        ),
-        border: Border.all(
-          color: AppColors.error.withValues(alpha: 0.15),
-        ),
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.15)),
       ),
       child: Column(
         children: [
-          const Icon(
-            Icons.cloud_off_rounded,
-            color: AppColors.error,
-            size: 34,
-          ),
+          const Icon(Icons.cloud_off_rounded, color: AppColors.error, size: 34),
           const SizedBox(height: 10),
           const Text(
             'Unable to load buses',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
           ),
           const SizedBox(height: 5),
           Text(
@@ -295,10 +254,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
           SizedBox(height: 12),
           Text(
             'No buses available',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           SizedBox(height: 5),
           Text(
@@ -312,23 +268,20 @@ class _TrackingScreenState extends State<TrackingScreen> {
   }
 
   Widget _buildBusCard(BusInfo bus) {
+    // ✅ FIX: Handle nullable routeName safely
+    final routeLabel = (bus.routeName == null || bus.routeName!.isEmpty)
+        ? 'Route not available'
+        : bus.routeName!;
+
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(
-        AppDimensions.cardRadius,
-      ),
+      borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(
-          AppDimensions.cardRadius,
-        ),
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => BusDetailScreen(
-                bus: bus,
-              ),
-            ),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => BusDetailScreen(bus: bus)));
         },
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -340,10 +293,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 height: 56,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primaryLight,
-                    ],
+                    colors: [AppColors.primary, AppColors.primaryLight],
                   ),
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -364,9 +314,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            bus.busNumber.isEmpty
-                                ? 'Bus'
-                                : bus.busNumber,
+                            bus.busNumber.isEmpty ? 'Bus' : bus.busNumber,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 17,
@@ -380,10 +328,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
                     const SizedBox(height: 5),
 
+                    // ✅ Uses the safe routeLabel
                     Text(
-                      bus.routeName.isEmpty
-                          ? 'Route not available'
-                          : bus.routeName,
+                      routeLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.subtitle,
@@ -404,9 +351,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                         ),
                         const SizedBox(width: 5),
                         Text(
-                          bus.isActive
-                              ? 'Bus available'
-                              : 'Bus inactive',
+                          bus.isActive ? 'Bus available' : 'Bus inactive',
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,
@@ -437,10 +382,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
   Widget _statusBadge(bool active) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: active
             ? AppColors.success.withValues(alpha: 0.10)
@@ -452,9 +394,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
         style: TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.w800,
-          color: active
-              ? AppColors.success
-              : AppColors.textSecondary,
+          color: active ? AppColors.success : AppColors.textSecondary,
         ),
       ),
     );
@@ -463,12 +403,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(
-        AppDimensions.cardRadius,
-      ),
-      border: Border.all(
-        color: AppColors.border,
-      ),
+      borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+      border: Border.all(color: AppColors.border),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.035),
@@ -479,4 +415,3 @@ class _TrackingScreenState extends State<TrackingScreen> {
     );
   }
 }
-
