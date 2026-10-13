@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/student.dart';
 import '../../services/auth_service.dart';
-import '../../services/session_service.dart';     // ← ADD THIS
-import '../../theme/app_theme.dart';
+import '../../services/session_service.dart';
+import '../../theme/app_colors.dart';
 import '../shell/busx_shell.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -21,6 +22,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _rememberMe = false;
+
+  // ---- storage keys ----
+  static const _kRememberMe = 'remember_me';
+  static const _kSavedUsn = 'saved_usn';
+  static const _kSavedPwd = 'saved_password';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
 
   @override
   void dispose() {
@@ -30,67 +43,89 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ------------------------------------------------------------
+  // LOAD SAVED CREDENTIALS
+  // ------------------------------------------------------------
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final remember = prefs.getBool(_kRememberMe) ?? false;
+    final usn = prefs.getString(_kSavedUsn);
+    final pwd = prefs.getString(_kSavedPwd);
+
+    debugPrint('🔍🔍🔍 LOAD ===== remember=$remember  USN=$usn  PWD=$pwd');
+
+    if (!remember) return;
+    if (!mounted) return;
+
+    setState(() {
+      _rememberMe = true;
+      _usnController.text = usn ?? '';
+      _passwordController.text = pwd ?? '';
+    });
+  }
+
+  // ------------------------------------------------------------
+  // SAVE / CLEAR CREDENTIALS
+  // ------------------------------------------------------------
+  Future<void> _saveCredentials(String usn, String password) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    debugPrint(
+        '💾💾💾 SAVE ===== rememberMe=$_rememberMe  USN=$usn  PWD=$password');
+
+    if (_rememberMe) {
+      await prefs.setBool(_kRememberMe, true);
+      await prefs.setString(_kSavedUsn, usn);
+      await prefs.setString(_kSavedPwd, password);
+      debugPrint('✅ saved to prefs');
+    } else {
+      await prefs.remove(_kRememberMe);
+      await prefs.remove(_kSavedUsn);
+      await prefs.remove(_kSavedPwd);
+      debugPrint('❌ cleared from prefs');
+    }
+  }
+
+  // ------------------------------------------------------------
   // LOGIN
   // ------------------------------------------------------------
-
   Future<void> _login() async {
     FocusScope.of(context).unfocus();
 
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     final usn = _usnController.text.trim().toUpperCase();
     final password = _passwordController.text;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final Student? student = await AuthService().login(
-        usn: usn,
-        password: password,
-      );
+      final Student? student =
+          await AuthService().login(usn: usn, password: password);
 
       if (!mounted) return;
 
       if (student == null) {
-        setState(() {
-          _isLoading = false;
-        });
-
-        _showMessage(
-          'Invalid USN or password',
-          isError: true,
-        );
-
+        setState(() => _isLoading = false);
+        _showMessage('Invalid USN or password', isError: true);
         return;
       }
 
-      // --------------------------------------------------------
-      // Save logged-in student locally.
-      // --------------------------------------------------------
-      await SessionService.saveStudent(student);
+      // Save or clear credentials based on checkbox
+      debugPrint('📞 calling _saveCredentials');
+      await _saveCredentials(usn, password);
+      debugPrint('📞 _saveCredentials done');
 
+      await SessionService.saveStudent(student);
       if (!mounted) return;
 
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
 
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const BusXShell(),
-        ),
+        MaterialPageRoute(builder: (_) => const BusXShell()),
       );
     } catch (e) {
       if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
+      setState(() => _isLoading = false);
       _showMessage(
         e.toString().replaceFirst('Exception: ', ''),
         isError: true,
@@ -99,13 +134,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ------------------------------------------------------------
-  // MESSAGE
+  // SNACKBAR
   // ------------------------------------------------------------
-
-  void _showMessage(
-    String message, {
-    bool isError = false,
-  }) {
+  void _showMessage(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -119,9 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 color: Colors.white,
               ),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(message),
-              ),
+              Expanded(child: Text(message)),
             ],
           ),
           backgroundColor:
@@ -138,379 +167,244 @@ class _LoginScreenState extends State<LoginScreen> {
   // ------------------------------------------------------------
   // BUILD
   // ------------------------------------------------------------
-
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-
-    // Keeps the content comfortable on tablets/web while
-    // remaining fully responsive on phones.
-    final contentWidth = screenWidth > 600 ? 480.0 : double.infinity;
+    final contentWidth = screenWidth > 600 ? 460.0 : double.infinity;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-
+      backgroundColor: const Color(0xFFF5F7FB),
       body: SafeArea(
         child: GestureDetector(
-          onTap: () {
-            FocusScope.of(context).unfocus();
-          },
-
+          onTap: () => FocusScope.of(context).unfocus(),
           child: Center(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-
               padding: EdgeInsets.symmetric(
-                horizontal: screenWidth < 360 ? 18 : 24,
+                horizontal: screenWidth < 360 ? 20 : 24,
                 vertical: 24,
               ),
-
               child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: contentWidth,
-                ),
-
+                constraints: BoxConstraints(maxWidth: contentWidth),
                 child: Form(
                   key: _formKey,
-
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-
-                      // ------------------------------------------------
-                      // LOGO
-                      // ------------------------------------------------
+                      const SizedBox(height: 8),
 
                       _buildLogo(),
 
-                      const SizedBox(height: 24),
-
-                      // ------------------------------------------------
-                      // TITLE
-                      // ------------------------------------------------
+                      const SizedBox(height: 22),
 
                       const Text(
-                        'Welcome Back!',
+                        'Welcome Back',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 28,
+                          fontSize: 26,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-
-                      const SizedBox(height: 8),
-
+                      const SizedBox(height: 6),
                       Text(
-                        'Sign in to access your SGI bus tracking account',
+                        'Sign in to continue',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.grey.shade600,
-                          fontSize: 14,
-                          height: 1.4,
+                          fontSize: 13.5,
                         ),
                       ),
 
-                      const SizedBox(height: 34),
+                      const SizedBox(height: 30),
 
-                      // ------------------------------------------------
-                      // LOGIN CARD
-                      // ------------------------------------------------
-
+                      // ---- Card ----
                       Container(
                         padding: EdgeInsets.all(
                           screenWidth < 360 ? 18 : 22,
                         ),
-
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: const Color(0xFFE2E8F0),
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: 0.06,
-                              ),
-                              blurRadius: 24,
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 20,
                               offset: const Offset(0, 8),
                             ),
                           ],
                         ),
-
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-
-                            // ------------------------------------------
-                            // USN
-                            // ------------------------------------------
-
+                            // ---- USN ----
                             const Text(
                               'Student USN',
                               style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
                               ),
                             ),
-
                             const SizedBox(height: 8),
-
                             TextFormField(
                               controller: _usnController,
-
                               textCapitalization:
                                   TextCapitalization.characters,
-
-                              textInputAction:
-                                  TextInputAction.next,
-
-                              keyboardType:
-                                  TextInputType.text,
-
+                              textInputAction: TextInputAction.next,
                               enabled: !_isLoading,
-
                               autocorrect: false,
-
-                              decoration: InputDecoration(
-                                hintText: 'Enter your USN',
-
-                                prefixIcon: const Icon(
-                                  Icons.badge_outlined,
-                                ),
-
-                                prefixIconColor:
-                                    AppTheme.primaryBlue,
-
-                                filled: true,
-                                fillColor:
-                                    const Color(0xFFF8FAFC),
-
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 16,
-                                ),
-
-                                border: OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                  borderSide: BorderSide.none,
-                                ),
-
-                                enabledBorder:
-                                    OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE5E7EB),
-                                  ),
-                                ),
-
-                                focusedBorder:
-                                    OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                  borderSide: const BorderSide(
-                                    color: AppTheme.primaryBlue,
-                                    width: 1.5,
-                                  ),
-                                ),
+                              decoration: _inputDecoration(
+                                hint: 'Enter your USN',
+                                icon: Icons.badge_outlined,
                               ),
-
                               validator: (value) {
                                 if (value == null ||
                                     value.trim().isEmpty) {
                                   return 'Please enter your USN';
                                 }
-
                                 return null;
                               },
                             ),
 
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 18),
 
-                            // ------------------------------------------
-                            // PASSWORD
-                            // ------------------------------------------
-
+                            // ---- Password ----
                             const Text(
                               'Password',
                               style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
                               ),
                             ),
-
                             const SizedBox(height: 8),
-
                             TextFormField(
                               controller: _passwordController,
-
                               obscureText: _obscurePassword,
-
-                              textInputAction:
-                                  TextInputAction.done,
-
+                              textInputAction: TextInputAction.done,
                               enabled: !_isLoading,
-
                               autocorrect: false,
-
                               onFieldSubmitted: (_) {
-                                if (!_isLoading) {
-                                  _login();
-                                }
+                                if (!_isLoading) _login();
                               },
-
-                              decoration: InputDecoration(
-                                hintText: 'Enter your password',
-
-                                prefixIcon: const Icon(
-                                  Icons.lock_outline_rounded,
-                                ),
-
-                                prefixIconColor:
-                                    AppTheme.primaryBlue,
-
-                                suffixIcon: IconButton(
+                              decoration: _inputDecoration(
+                                hint: 'Enter your password',
+                                icon: Icons.lock_outline_rounded,
+                                suffix: IconButton(
                                   tooltip: _obscurePassword
                                       ? 'Show password'
                                       : 'Hide password',
-
                                   onPressed: _isLoading
                                       ? null
-                                      : () {
-                                          setState(() {
-                                            _obscurePassword =
-                                                !_obscurePassword;
-                                          });
-                                        },
-
+                                      : () => setState(() =>
+                                          _obscurePassword =
+                                              !_obscurePassword),
                                   icon: Icon(
                                     _obscurePassword
-                                        ? Icons
-                                            .visibility_outlined
-                                        : Icons
-                                            .visibility_off_outlined,
-                                  ),
-                                ),
-
-                                filled: true,
-                                fillColor:
-                                    const Color(0xFFF8FAFC),
-
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 16,
-                                ),
-
-                                border: OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                  borderSide: BorderSide.none,
-                                ),
-
-                                enabledBorder:
-                                    OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE5E7EB),
-                                  ),
-                                ),
-
-                                focusedBorder:
-                                    OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                  borderSide: const BorderSide(
-                                    color: AppTheme.primaryBlue,
-                                    width: 1.5,
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                    color: AppColors.textSecondary,
+                                    size: 20,
                                   ),
                                 ),
                               ),
-
                               validator: (value) {
-                                if (value == null ||
-                                    value.isEmpty) {
+                                if (value == null || value.isEmpty) {
                                   return 'Please enter your password';
                                 }
-
                                 return null;
                               },
                             ),
 
-                            const SizedBox(height: 26),
+                            const SizedBox(height: 12),
 
-                            // ------------------------------------------
-                            // LOGIN BUTTON
-                            // ------------------------------------------
+                            // ---- Remember me ----
+                            Row(
+                              children: [
+                                SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: Checkbox(
+                                    value: _rememberMe,
+                                    onChanged: _isLoading
+                                        ? null
+                                        : (v) => setState(() =>
+                                            _rememberMe = v ?? false),
+                                    activeColor: AppColors.primary,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(6),
+                                    ),
+                                    side: const BorderSide(
+                                      color: Color(0xFFCBD5E1),
+                                      width: 1.5,
+                                    ),
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                GestureDetector(
+                                  onTap: _isLoading
+                                      ? null
+                                      : () => setState(() =>
+                                          _rememberMe = !_rememberMe),
+                                  child: const Text(
+                                    'Remember my USN and password',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textPrimary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
 
+                            const SizedBox(height: 22),
+
+                            // ---- Login button ----
                             SizedBox(
                               width: double.infinity,
-                              height: 54,
-
+                              height: 52,
                               child: ElevatedButton(
-                                onPressed:
-                                    _isLoading ? null : _login,
-
+                                onPressed: _isLoading ? null : _login,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      AppTheme.primaryBlue,
-
-                                  foregroundColor:
-                                      Colors.white,
-
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
                                   disabledBackgroundColor:
-                                      AppTheme.primaryBlue
+                                      AppColors.primary
                                           .withValues(alpha: 0.65),
-
-                                  disabledForegroundColor:
-                                      Colors.white,
-
+                                  disabledForegroundColor: Colors.white,
                                   elevation: 0,
-
-                                  shape:
-                                      RoundedRectangleBorder(
+                                  shape: RoundedRectangleBorder(
                                     borderRadius:
                                         BorderRadius.circular(14),
                                   ),
                                 ),
-
                                 child: _isLoading
                                     ? const SizedBox(
-                                        width: 23,
-                                        height: 23,
-                                        child:
-                                            CircularProgressIndicator(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
                                           strokeWidth: 2.5,
                                           valueColor:
                                               AlwaysStoppedAnimation<
-                                                  Color>(
-                                            Colors.white,
-                                          ),
+                                                  Color>(Colors.white),
                                         ),
                                       )
-                                    : const Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            'LOGIN',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight:
-                                                  FontWeight.bold,
-                                              letterSpacing: 0.5,
-                                            ),
-                                          ),
-                                          SizedBox(width: 8),
-                                          Icon(
-                                            Icons
-                                                .arrow_forward_rounded,
-                                            size: 20,
-                                          ),
-                                        ],
+                                    : const Text(
+                                        'Login',
+                                        style: TextStyle(
+                                          fontSize: 15.5,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.3,
+                                        ),
                                       ),
                               ),
                             ),
@@ -518,51 +412,20 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 28),
-
-                      // ------------------------------------------------
-                      // SECURITY / INFO
-                      // ------------------------------------------------
-
-                      Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons
-                                .verified_user_outlined,
-                            size: 16,
-                            color: Colors.grey.shade500,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              'Student access only',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 24),
 
                       Text(
-                        'SGI Bus Tracking System',
+                        'BusX Tracking System',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.grey.shade500,
                           fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-
-                      const SizedBox(height: 8),
-
+                      const SizedBox(height: 4),
                       Text(
-                        '© ${DateTime.now().year} SGI',
+                        '© ${DateTime.now().year} BusX',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.grey.shade400,
@@ -581,42 +444,83 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ------------------------------------------------------------
-  // LOGO WIDGET
+  // INPUT DECORATION
   // ------------------------------------------------------------
+  InputDecoration _inputDecoration({
+    required String hint,
+    required IconData icon,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+      prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
+      suffixIcon: suffix,
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 16,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: AppColors.primary,
+          width: 1.6,
+        ),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFDC2626)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFDC2626),
+          width: 1.6,
+        ),
+      ),
+    );
+  }
 
+  // ------------------------------------------------------------
+  // LOGO
+  // ------------------------------------------------------------
   Widget _buildLogo() {
     return Center(
       child: Container(
-        width: 88,
-        height: 88,
-
+        width: 80,
+        height: 80,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              AppTheme.primaryBlue,
-              AppTheme.blue,
+              AppColors.primary,
+              AppColors.primaryLight,
             ],
           ),
-
-          borderRadius: BorderRadius.circular(26),
-
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: AppTheme.primaryBlue.withValues(
-                alpha: 0.22,
-              ),
-              blurRadius: 20,
+              color: AppColors.primary.withValues(alpha: 0.22),
+              blurRadius: 18,
               offset: const Offset(0, 8),
             ),
           ],
         ),
-
         child: const Icon(
           Icons.directions_bus_rounded,
           color: Colors.white,
-          size: 50,
+          size: 42,
         ),
       ),
     );

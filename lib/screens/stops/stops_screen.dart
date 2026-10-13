@@ -34,6 +34,10 @@ class _StopsScreenState extends State<StopsScreen>
     super.dispose();
   }
 
+  /// Top padding that clears the floating top bar.
+  double _topPad(BuildContext context) =>
+      MediaQuery.of(context).padding.top + kToolbarHeight - 56;
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -42,15 +46,6 @@ class _StopsScreenState extends State<StopsScreen>
 
     try {
       final student = await SessionService.getStudent();
-
-      // 🔍 DEBUG
-      debugPrint('===== STOPS DEBUG =====');
-      debugPrint('student           = $student');
-      debugPrint('student.id        = ${student?.id}');
-      debugPrint('student.routes    = ${student?.routes}');
-      debugPrint('student.routeId   = ${student?.routeId}');
-      debugPrint('=======================');
-
       if (student == null) throw Exception('Not logged in');
 
       final routeId = student.routeId;
@@ -59,7 +54,6 @@ class _StopsScreenState extends State<StopsScreen>
             'No route assigned. Please contact your institution.');
       }
 
-      // Fetch route name
       String? routeName;
       try {
         final r = await Supabase.instance.client
@@ -68,21 +62,15 @@ class _StopsScreenState extends State<StopsScreen>
             .eq('id', routeId)
             .maybeSingle();
         routeName = r?['name'] as String?;
-        debugPrint('🔍 routeName from DB = $routeName');
-      } catch (e) {
-        debugPrint('❌ route name fetch error: $e');
-      }
+      } catch (_) {}
 
-      // Fetch stops for THIS student's route
       final res = await Supabase.instance.client
           .from('bus_stops')
           .select()
           .eq('route_id', routeId)
           .order('sequence', ascending: true);
 
-      debugPrint('🔍 stops rows returned = ${(res as List).length}');
-
-      final all = (res)
+      final all = (res as List)
           .map((e) => BusStop.fromMap(e as Map<String, dynamic>))
           .toList();
 
@@ -93,9 +81,6 @@ class _StopsScreenState extends State<StopsScreen>
           .where((s) => s.direction.trim().toLowerCase() == 'evening')
           .toList();
 
-      debugPrint('🔍 morning stops = ${morning.length}');
-      debugPrint('🔍 evening stops = ${evening.length}');
-
       if (!mounted) return;
       setState(() {
         _morning = morning;
@@ -104,7 +89,6 @@ class _StopsScreenState extends State<StopsScreen>
         _loading = false;
       });
     } catch (e) {
-      debugPrint('❌ stops error: $e');
       if (!mounted) return;
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
@@ -115,49 +99,143 @@ class _StopsScreenState extends State<StopsScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      appBar: AppBar(
-        title: Text(
-          (_routeName == null || _routeName!.isEmpty)
-              ? 'Bus Stops'
-              : 'Stops • $_routeName',
-        ),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        bottom: TabBar(
-          controller: _tab,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.white,
-          tabs: const [
-            Tab(text: 'Morning'),
-            Tab(text: 'Evening'),
-          ],
-        ),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.black54),
+    final topPad = _topPad(context);
+
+    return Column(
+      children: [
+        // ---- Route name strip ----
+        if (_routeName != null && _routeName!.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, topPad, 16, 8),
+            child: Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.route_rounded,
+                        size: 16, color: AppColors.primary),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Your Route',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _routeName!,
+                          style: const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
-                )
-              : TabBarView(
-                  controller: _tab,
-                  children: [
-                    _list(_morning, 'morning'),
-                    _list(_evening, 'evening'),
-                  ],
+                ],
+              ),
+            ),
+          )
+        else
+          SizedBox(height: topPad),
+
+        // ---- Tab bar (white pill) ----
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: TabBar(
+                controller: _tab,
+                labelColor: Colors.white,
+                unselectedLabelColor: AppColors.textSecondary,
+                indicator: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                labelStyle: const TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 14),
+                unselectedLabelStyle:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                tabs: const [
+                  Tab(text: 'Morning'),
+                  Tab(text: 'Evening'),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        // ---- Tab content ----
+        Expanded(
+          child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary))
+              : _error != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                      ),
+                    )
+                  : TabBarView(
+                      controller: _tab,
+                      children: [
+                        _list(_morning, 'morning'),
+                        _list(_evening, 'evening'),
+                      ],
+                    ),
+        ),
+      ],
     );
   }
 
@@ -168,10 +246,10 @@ class _StopsScreenState extends State<StopsScreen>
         color: AppColors.primary,
         child: ListView(
           children: [
-            const SizedBox(height: 150),
+            const SizedBox(height: 120),
             Center(
               child: Text(
-                'No ${direction} stops',
+                'No $direction stops',
                 style: TextStyle(color: Colors.grey.shade600),
               ),
             ),
@@ -184,24 +262,31 @@ class _StopsScreenState extends State<StopsScreen>
       onRefresh: _load,
       color: AppColors.primary,
       child: ListView.separated(
-        padding: const EdgeInsets.all(12),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         itemCount: stops.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (_, i) {
           final s = stops[i];
-          return Card(
-            elevation: 0,
-            color: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.shade200),
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: ListTile(
               leading: CircleAvatar(
                 backgroundColor: AppColors.primary.withValues(alpha: 0.12),
                 child: Text(
                   '${s.sequence}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.bold,
                   ),

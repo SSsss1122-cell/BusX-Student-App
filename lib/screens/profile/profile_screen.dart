@@ -29,19 +29,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadData() async {
     setState(() => _loading = true);
 
-    // 1. Get student from session (or from widget)
     Student? s = widget.student;
     s ??= await SessionService.getStudent();
 
-    // 2. Get institution name (cached at login)
     String? instName = await SessionService.getInstitutionName();
 
-    // 3. If not cached, fetch from Supabase
     if (instName == null && s != null) {
       try {
         final row = await Supabase.instance.client
             .from('institutions')
-            .select('name')      // ⚠️ change to 'institution_name' if that's the column
+            .select('name')
             .eq('id', s.institutionId)
             .maybeSingle();
 
@@ -59,30 +56,124 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _loading = false;
     });
   }
-
   Future<void> _handleLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 30,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ---- Icon badge ----
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.logout_rounded,
+                  color: Colors.red.shade600,
+                  size: 34,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ---- Title ----
+              const Text(
+                'Logout?',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // ---- Message ----
+              const Text(
+                'Are you sure you want to sign out of your account?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // ---- Buttons ----
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textPrimary,
+                          side: const BorderSide(
+                              color: Color(0xFFE2E8F0), width: 1.2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade600,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Logout',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        title: const Text('Logout?'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Logout'),
-          ),
-        ],
       ),
     );
 
@@ -99,41 +190,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      appBar: AppBar(
-        title: const Text('My Profile'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
+    // NOTE: no Scaffold/AppBar — the shell provides them.
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+    if (_student == null) return _buildNoStudent();
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      color: AppColors.primary,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+    padding: EdgeInsets.fromLTRB(
+  16,
+  MediaQuery.of(context).padding.top + kToolbarHeight - 56,
+  16,
+  120,
+),
+        child: Column(
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 24),
+            _buildInfoCard(),
+            const SizedBox(height: 20),
+            _buildLogoutButton(),
+          ],
+        ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _student == null
-              ? _buildNoStudent()
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  color: AppColors.primary,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        _buildHeader(),
-                        const SizedBox(height: 18),
-                        _buildInfoCard(),
-                        const SizedBox(height: 18),
-                        _buildLogoutButton(),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
-                ),
     );
   }
 
   // -----------------------------------------------------------------
-  // HEADER (avatar + name + usn)
+  // HEADER — small clean avatar (blue circle) + name + usn
   // -----------------------------------------------------------------
   Widget _buildHeader() {
     final name = _student!.fullName;
@@ -145,63 +235,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .map((p) => p[0].toUpperCase())
         .join();
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary,
-            AppColors.primary.withValues(alpha: 0.75),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.25),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+    return Column(
+      children: [
+        // ---- Small blue circular avatar ----
+        Container(
+          width: 84,
+          height: 84,
+          decoration: BoxDecoration(
+            color: AppColors.primary, // blue ONLY behind the circle
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.25),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 44,
-            backgroundColor: Colors.white24,
-            child: initials.isEmpty
-                ? const Icon(Icons.person, color: Colors.white, size: 44)
-                : Text(
-                    initials,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                    ),
+          alignment: Alignment.center,
+          child: initials.isEmpty
+              ? const Icon(Icons.person, color: Colors.white, size: 40)
+              : Text(
+                  initials,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+        ),
+        const SizedBox(height: 14),
+
+        // ---- Name ----
+        Text(
+          name,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 19,
+            fontWeight: FontWeight.bold,
           ),
-          const SizedBox(height: 14),
-          Text(
-            name,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+        ),
+        const SizedBox(height: 4),
+
+        // ---- USN ----
+        Text(
+          _student!.usn ?? '—',
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
           ),
-          const SizedBox(height: 4),
-          Text(
-            _student!.usn ?? '—',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -217,6 +303,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -230,55 +317,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           const Text(
             'Student Details',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 14),
           Divider(color: Colors.grey.shade200, height: 1),
           const SizedBox(height: 8),
 
-          _infoRow(
-            Icons.badge_rounded,
-            'USN',
-            _orNA(s.usn),
-          ),
-          _infoRow(
-            Icons.person_rounded,
-            'Full Name',
-            s.fullName,
-          ),
-          _infoRow(
-            Icons.school_rounded,
-            'Branch',
-            _orNA(s.branch),
-          ),
-          _infoRow(
-            Icons.calendar_today_rounded,
-            'Semester',
-            _formatSemester(s.semester),
-          ),
-          _infoRow(
-            Icons.account_balance_rounded,
-            'Institution',
-            _institutionName ?? 'Not available',
-          ),
-          _infoRow(
-            Icons.directions_bus_rounded,
-            'Route',
-            _orNA(s.routes),
-          ),
-          _infoRow(
-            Icons.phone_rounded,
-            'Phone',
-            _orNA(s.phone),
-          ),
-          _infoRow(
-            Icons.email_rounded,
-            'Email',
-            _orNA(s.email),
-          ),
+          _infoRow(Icons.badge_rounded, 'USN', _orNA(s.usn)),
+          _infoRow(Icons.person_rounded, 'Full Name', s.fullName),
+          _infoRow(Icons.school_rounded, 'Branch', _orNA(s.branch)),
+          _infoRow(Icons.calendar_today_rounded, 'Semester',
+              _formatSemester(s.semester)),
+          _infoRow(Icons.account_balance_rounded, 'Institution',
+              _institutionName ?? 'Not available'),
+          _infoRow(Icons.directions_bus_rounded, 'Route', _orNA(s.routes)),
+          _infoRow(Icons.phone_rounded, 'Phone', _orNA(s.phone)),
+          _infoRow(Icons.email_rounded, 'Email', _orNA(s.email)),
         ],
       ),
     );
@@ -292,11 +346,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _formatSemester(String? sem) {
     if (sem == null || sem.trim().isEmpty) return 'Not available';
-    // If it's just a number like "5", prefix with "Semester "
     final trimmed = sem.trim();
-    if (RegExp(r'^\d+$').hasMatch(trimmed)) {
-      return 'Semester $trimmed';
-    }
+    if (RegExp(r'^\d+$').hasMatch(trimmed)) return 'Semester $trimmed';
     return trimmed;
   }
 
@@ -319,13 +370,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.grey.shade600)),
                 const SizedBox(height: 2),
                 Text(
                   value,
@@ -382,16 +429,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
             const Text(
               'No student data found',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Please log in again.',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
+            Text('Please log in again.',
+                style: TextStyle(color: Colors.grey.shade600)),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {

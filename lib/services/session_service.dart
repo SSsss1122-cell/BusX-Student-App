@@ -52,7 +52,7 @@ class SessionService {
   }
 
   // ------------------------------------------------------------
-  // INSTITUTION NAME (cached after login)
+  // INSTITUTION NAME
   // ------------------------------------------------------------
   static Future<String?> getInstitutionName() async {
     final prefs = await SharedPreferences.getInstance();
@@ -65,7 +65,7 @@ class SessionService {
   }
 
   // ------------------------------------------------------------
-  // LOGOUT
+  // LOGOUT — only removes session keys, keeps saved credentials
   // ------------------------------------------------------------
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
