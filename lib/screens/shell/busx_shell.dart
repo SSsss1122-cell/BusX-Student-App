@@ -6,9 +6,8 @@ import '../home/home_screen.dart';
 import '../profile/profile_screen.dart';
 import '../complaints/complaints_screen.dart';
 import '../announcements/announcements_screen.dart';
-import '../notices/notices_screen.dart';
 import '../fees/fees_screen.dart';
-import '../stops/stops_screen.dart';       // ← NEW
+import '../stops/stops_screen.dart';
 import '../login/login_screen.dart';
 
 class BusXShell extends StatefulWidget {
@@ -24,14 +23,14 @@ class _BusXShellState extends State<BusXShell> {
 
   final List<Widget> _screens = const [
     HomeScreen(),        // 0
-    StopsScreen(),       // 1  ← NEW
+    StopsScreen(),       // 1
     FeesScreen(),        // 2
     ProfileScreen(),     // 3
   ];
 
   final List<String> _titles = const [
     'Live Tracking',
-    'Bus Stops',         // ← NEW
+    'Bus Stops',
     'Fees',
     'My Profile',
   ];
@@ -88,7 +87,7 @@ class _BusXShellState extends State<BusXShell> {
             label: 'Tracking',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.route_rounded),      // ← NEW
+            icon: Icon(Icons.route_rounded),
             label: 'Stops',
           ),
           BottomNavigationBarItem(
@@ -176,7 +175,7 @@ class _BusXShellState extends State<BusXShell> {
             Navigator.pop(context);
             setState(() => _currentIndex = 0);
           }),
-          _drawerItem(Icons.route_outlined, 'Bus Stops', () {     // ← NEW
+          _drawerItem(Icons.route_outlined, 'Bus Stops', () {
             Navigator.pop(context);
             setState(() => _currentIndex = 1);
           }),
@@ -202,16 +201,9 @@ class _BusXShellState extends State<BusXShell> {
             Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const AnnouncementsScreen()));
           }),
-          _drawerItem(Icons.notifications_outlined, 'Notices', () {
-            Navigator.pop(context);
-            Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const NoticesScreen()));
-          }),
 
           const Divider(),
 
-          _drawerItem(Icons.settings_outlined, 'Settings',
-              () => Navigator.pop(context)),
           _drawerItem(Icons.logout_rounded, 'Logout', () async {
             Navigator.pop(context);
             await SessionService.logout();
