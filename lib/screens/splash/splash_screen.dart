@@ -1,7 +1,8 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/session_service.dart';
+import '../../services/version_checker.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/update_dialog.dart';
 import '../shell/busx_shell.dart';
 import '../login/login_screen.dart';
 
@@ -15,8 +16,10 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _fade;
-  late Animation<double> _scale;
+  late Animation<double> _blueReveal;
+  late Animation<double> _contentFade;
+  late Animation<double> _contentScale;
+  late Animation<double> _spinnerFade;
 
   @override
   void initState() {
@@ -24,12 +27,29 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1600),
     );
 
-    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _scale = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    _blueReveal = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.0, 0.65, curve: Curves.easeInOutCubic),
+    );
+
+    _contentFade = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.45, 0.85, curve: Curves.easeOut),
+    );
+
+    _contentScale = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.45, 0.85, curve: Curves.easeOutBack),
+      ),
+    );
+
+    _spinnerFade = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.7, 1.0, curve: Curves.easeOut),
     );
 
     _controller.forward();
@@ -37,9 +57,18 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _goNext() async {
-    // Give the animation time to play (1.6s), then route
-    await Future.delayed(const Duration(milliseconds: 1600));
+    await Future.delayed(const Duration(milliseconds: 2000));
     if (!mounted) return;
+
+    final update = await VersionChecker.check();
+    if (!mounted) return;
+
+    if (update != null) {
+      final (info, force) = update;
+      await showUpdateDialog(context, info, force: force);
+      if (!mounted) return;
+      if (force) return;
+    }
 
     final student = await SessionService.getStudent();
     if (!mounted) return;
@@ -60,95 +89,131 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    // Use diagonal so circle covers corners
+    final diagonal =
+        (size.width * size.width + size.height * size.height);
+    // Newton's method for sqrt
+    double diag = diagonal;
+    double x = diagonal;
+    for (int i = 0; i < 20; i++) {
+      x = (x + diag / x) / 2;
+    }
+    final maxRadius = x / 2 + 60;
+
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF2563EB), // blue
-              Color(0xFF1D4ED8), // deep blue
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
+      backgroundColor: Colors.white,
+      body: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          // 0 → 1
+          final t = _blueReveal.value;
+          // Scale goes 0 → 1 (from nothing to full size)
+          final scale = t;
+
+          return Stack(
+            // Make sure nothing is clipped
+            clipBehavior: Clip.none,
             children: [
-              const Spacer(),
-
-              // ---- Logo ----
-              FadeTransition(
-                opacity: _fade,
-                child: ScaleTransition(
-                  scale: _scale,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              blurRadius: 24,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.directions_bus_filled_rounded,
-                          size: 64,
-                          color: AppColors.primary,
-                        ),
+              // ---- Blue circle (fixed size, scaled) ----
+              Positioned(
+                left: size.width / 2 - maxRadius,
+                top: size.height / 2 - maxRadius,
+                width: maxRadius * 2,
+                height: maxRadius * 2,
+                child: Transform.scale(
+                  scale: scale,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF2563EB),
+                          Color(0xFF1D4ED8),
+                        ],
                       ),
-                      const SizedBox(height: 28),
-                      const Text(
-                        'BusX',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 40,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -1,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Student Bus Tracking',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const Spacer(),
-
-              // ---- Loading indicator ----
-              FadeTransition(
-                opacity: _fade,
-                child: const Padding(
-                  padding: EdgeInsets.only(bottom: 40),
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2.5,
                     ),
                   ),
                 ),
               ),
+
+              // ---- Content on top ----
+              Positioned.fill(
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      const Spacer(flex: 3),
+
+                      FadeTransition(
+                        opacity: _contentFade,
+                        child: ScaleTransition(
+                          scale: _contentScale,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // ---- White circle with bus icon ----
+                              Container(
+                                width: 120,
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black
+                                          .withValues(alpha: 0.18),
+                                      blurRadius: 30,
+                                      offset: const Offset(0, 12),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.directions_bus_filled_rounded,
+                                  size: 60,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+
+                              // ---- "BusX" text ----
+                              const Text(
+                                'BusX',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 42,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -1.2,
+                                ),
+                              ),
+                              // ❌ "Student Bus Tracking" pill removed
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const Spacer(flex: 4),
+
+                      FadeTransition(
+                        opacity: _spinnerFade,
+                        child: const SizedBox(
+                          width: 26,
+                          height: 26,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 60),
+                    ],
+                  ),
+                ),
+              ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }

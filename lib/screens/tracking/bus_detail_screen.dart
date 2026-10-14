@@ -48,7 +48,6 @@ class _BusDetailScreenState extends State<BusDetailScreen>
     super.initState();
     _tab = TabController(length: 2, vsync: this);
 
-    // Seed with whatever we already have from the bus list screen
     _lat = widget.bus.latitude;
     _lng = widget.bus.longitude;
     _speed = widget.bus.speed;
@@ -57,12 +56,10 @@ class _BusDetailScreenState extends State<BusDetailScreen>
     _loadStops();
     _refreshLocation();
 
-    // Poll live location every 10 seconds
     _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       _refreshLocation();
     });
 
-    // 1-second UI tick so the SIGNAL LOST banner flips at the 40s mark
     _uiTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -104,17 +101,15 @@ class _BusDetailScreenState extends State<BusDetailScreen>
         allStops = await _busService.getAllStops(widget.bus.id);
       }
 
-      final morning =
-          allStops
-              .where((s) => s.direction.trim().toLowerCase() == 'morning')
-              .toList()
-            ..sort((a, b) => a.sequence.compareTo(b.sequence));
+      final morning = allStops
+          .where((s) => s.direction.trim().toLowerCase() == 'morning')
+          .toList()
+        ..sort((a, b) => a.sequence.compareTo(b.sequence));
 
-      final evening =
-          allStops
-              .where((s) => s.direction.trim().toLowerCase() == 'evening')
-              .toList()
-            ..sort((a, b) => a.sequence.compareTo(b.sequence));
+      final evening = allStops
+          .where((s) => s.direction.trim().toLowerCase() == 'evening')
+          .toList()
+        ..sort((a, b) => a.sequence.compareTo(b.sequence));
 
       if (!mounted) return;
       setState(() {
@@ -181,7 +176,6 @@ class _BusDetailScreenState extends State<BusDetailScreen>
       }
     }
 
-    // Auto-advance if very close to current stop
     if (bestIndex == startIndex && bestDist < 100) {
       return (bestIndex + 1).clamp(0, stops.length - 1);
     }
@@ -269,144 +263,28 @@ class _BusDetailScreenState extends State<BusDetailScreen>
       ),
       body: Column(
         children: [
-          _buildLiveBanner(),
+          // ❌ _buildLiveBanner() removed
           _buildBusHeader(),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                ? _buildError()
-                : TabBarView(
-                    controller: _tab,
-                    children: [
-                      _stopsList(
-                        _morningStops,
-                        'morning',
-                        _morningCurrentIndex,
+                    ? _buildError()
+                    : TabBarView(
+                        controller: _tab,
+                        children: [
+                          _stopsList(
+                            _morningStops,
+                            'morning',
+                            _morningCurrentIndex,
+                          ),
+                          _stopsList(
+                            _eveningStops,
+                            'evening',
+                            _eveningCurrentIndex,
+                          ),
+                        ],
                       ),
-                      _stopsList(
-                        _eveningStops,
-                        'evening',
-                        _eveningCurrentIndex,
-                      ),
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------
-  // LIVE BANNER
-  // ---------------------------------------------
-  Widget _buildLiveBanner() {
-    final stale = _isSignalStale;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: stale
-              ? [Colors.grey.shade700, Colors.grey.shade500]
-              : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.my_location_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  stale ? 'Driver Offline' : 'Live Tracking',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.circle,
-                      size: 8,
-                      color: stale ? Colors.orange : Colors.white,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      stale ? 'SIGNAL LOST' : 'LIVE',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      stale
-                          ? 'Last known location'
-                          : (_lat != null && _lng != null
-                                ? '${_lat!.toStringAsFixed(4)}, ${_lng!.toStringAsFixed(4)}'
-                                : 'Waiting for GPS…'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      stale
-                          ? 'Driver stopped sharing location'
-                          : (_speed != null
-                                ? 'Speed: ${_speed!.toStringAsFixed(1)} km/h'
-                                : 'Speed: —'),
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                'Updated ${_formatUpdated()}',
-                style: const TextStyle(color: Colors.white, fontSize: 11),
-              ),
-            ],
           ),
         ],
       ),
@@ -533,7 +411,7 @@ class _BusDetailScreenState extends State<BusDetailScreen>
   }
 
   // ---------------------------------------------
-  // STOPS LIST (with live tracking decorations)
+  // STOPS LIST
   // ---------------------------------------------
   Widget _stopsList(List<BusStop> stops, String direction, int currentIndex) {
     if (stops.isEmpty) {
@@ -582,7 +460,6 @@ class _BusDetailScreenState extends State<BusDetailScreen>
           final distance = _distanceToStop(s);
           final eta = isUpcoming ? _etaToStop(s) : null;
 
-          // Decide colors
           Color leadingColor;
           Color leadingTextColor;
           Widget? leadingChild;
@@ -609,7 +486,6 @@ class _BusDetailScreenState extends State<BusDetailScreen>
             leadingChild = null;
           }
 
-          // Status badge
           String badgeLabel;
           Color badgeBg;
           Color badgeTextColor;
@@ -647,8 +523,7 @@ class _BusDetailScreenState extends State<BusDetailScreen>
                   CircleAvatar(
                     radius: 20,
                     backgroundColor: leadingColor,
-                    child:
-                        leadingChild ??
+                    child: leadingChild ??
                         Text(
                           '${s.sequence}',
                           style: TextStyle(
