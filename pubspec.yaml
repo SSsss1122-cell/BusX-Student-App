@@ -1,47 +1,67 @@
-name: student_app_sgi
-description: "A new Flutter project."
+name: Busx
+description: "BusX Student - Smart College Bus Tracking"
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.10.7
+  sdk: ^3.10.0
 
 dependencies:
   flutter:
     sdk: flutter
-
-  # ---- APP INFO / UPDATES ----
-  package_info_plus: ^10.2.1
-
-  # ---- UI / FONTS ----
-  cupertino_icons: ^1.0.8
-  google_fonts: ^6.2.1
-
-  # ---- BACKEND ----
+  cupertino_icons: ^1.0.9
   supabase_flutter: ^2.17.2
-
-  # ---- NETWORK / HTTP ----
-  http: ^1.6.0
-
-  # ---- LOCAL STORAGE ----
   shared_preferences: ^2.5.5
-
-  # ---- MAPS / LOCATION ----
+  cached_network_image: ^3.4.1
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
   geolocator: ^14.0.3
-
-  # ---- MEDIA / UTILS ----
-  image_picker: ^1.2.3
-  url_launcher: ^6.3.2
+  http: ^1.6.0
+  google_fonts: ^6.3.3
   intl: ^0.20.3
-  cached_network_image: ^3.3.0
+  url_launcher: ^6.3.2
+  package_info_plus: ^10.2.1
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/app_icon.png
+
+# ═══════════════════════════════════════════════════════
+# App launcher icon config
+# ═══════════════════════════════════════════════════════
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  adaptive_icon_background: "#1E3A8A"
+  adaptive_icon_foreground: "assets/images/app_icon.png"
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "assets/images/app_icon.png"
+    background_color: "#1E3A8A"
+    theme_color: "#1E3A8A"
+  windows:
+    generate: true
+    image_path: "assets/images/app_icon.png"
+    icon_size: 48
+  macos:
+    generate: true
+    image_path: "assets/images/app_icon.png"
+
+# ═══════════════════════════════════════════════════════
+# Force archive 3.x to fix flutter_launcher_icons
+# ═══════════════════════════════════════════════════════
+dependency_overrides:
+  archive: ^3.6.1
+  image: 4.0.15
+  
+  

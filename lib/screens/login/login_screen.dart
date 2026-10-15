@@ -4,7 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/student.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
+import '../../services/version_checker.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/update_dialog.dart';
 import '../shell/busx_shell.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -33,6 +35,11 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _loadSavedCredentials();
+
+    // Run version check silently after login screen renders
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForUpdates();
+    });
   }
 
   @override
@@ -40,6 +47,25 @@ class _LoginScreenState extends State<LoginScreen> {
     _usnController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  // ------------------------------------------------------------
+  // VERSION CHECK (silent, non-blocking)
+  // ------------------------------------------------------------
+  Future<void> _checkForUpdates() async {
+    if (!mounted) return;
+    try {
+      final update = await VersionChecker.check()
+          .timeout(const Duration(seconds: 5));
+      if (!mounted) return;
+
+      if (update != null) {
+        final (info, force) = update;
+        await showUpdateDialog(context, info, force: force);
+      }
+    } catch (_) {
+      // Silently ignore version check failures
+    }
   }
 
   // ------------------------------------------------------------

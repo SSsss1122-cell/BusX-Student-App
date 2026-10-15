@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../models/student.dart';
 import '../../services/session_service.dart';
-import '../../services/version_checker.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/update_dialog.dart';
 import '../shell/busx_shell.dart';
 import '../login/login_screen.dart';
 
@@ -57,20 +56,19 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _goNext() async {
+    // Let the animation play
     await Future.delayed(const Duration(milliseconds: 2000));
     if (!mounted) return;
 
-    final update = await VersionChecker.check();
-    if (!mounted) return;
-
-    if (update != null) {
-      final (info, force) = update;
-      await showUpdateDialog(context, info, force: force);
-      if (!mounted) return;
-      if (force) return;
+    // Session check (with 3s timeout)
+    Student? student;
+    try {
+      student = await SessionService.getStudent()
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {
+      student = null;
     }
 
-    final student = await SessionService.getStudent();
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
@@ -187,7 +185,6 @@ class _SplashScreenState extends State<SplashScreen>
                                   letterSpacing: -1.2,
                                 ),
                               ),
-                              // ❌ "Student Bus Tracking" pill removed
                             ],
                           ),
                         ),
